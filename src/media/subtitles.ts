@@ -6,6 +6,14 @@ export interface Cue {
 }
 
 export interface SubtitleStyle {
+  /**
+   * Arial is the one safe choice across build machines: it exists on macOS and
+   * Windows, and fontconfig aliases it to the metric-compatible Liberation Sans
+   * on Linux runners. Naming a font that is missing makes libass substitute a
+   * face with different metrics, so the same spec would wrap differently in CI
+   * than it does locally.
+   */
+  fontName: string;
   /** Video size; ASS sizes are in these units, so this makes them real pixels. */
   width: number;
   height: number;
@@ -16,6 +24,7 @@ export interface SubtitleStyle {
 }
 
 export const DEFAULT_STYLE: SubtitleStyle = {
+  fontName: 'Arial',
   width: 1280,
   height: 720,
   fontSize: 27,
@@ -24,11 +33,12 @@ export const DEFAULT_STYLE: SubtitleStyle = {
 };
 
 /**
- * Notes are meant to sit on one line. Helvetica's average advance is about
- * half the em, so this is how many characters fit between the safe margins.
+ * Notes are meant to sit on one line. Arial's average advance for mixed-case
+ * English is a little over half the em; 0.52 leaves a margin for error so a
+ * line never runs into the safe area.
  */
 export function maxChars(style: SubtitleStyle = DEFAULT_STYLE): number {
-  return Math.floor((style.width - 2 * style.marginH) / (style.fontSize * 0.5));
+  return Math.floor((style.width - 2 * style.marginH) / (style.fontSize * 0.52));
 }
 
 function pad(n: number, w = 2): string {
@@ -110,7 +120,7 @@ export function toAss(cues: Cue[], style: SubtitleStyle = DEFAULT_STYLE): string
       ' BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
     // Outline + soft shadow rather than an opaque box: readable over light and
     // dark UI without covering the app being demoed.
-    `Style: Rollcut,Helvetica,${style.fontSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,` +
+    `Style: Rollcut,${style.fontName},${style.fontSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,` +
       `-1,0,0,0,100,100,0,0,1,3,1.5,2,${style.marginH},${style.marginH},${style.marginV},1`,
     '',
     '[Events]',

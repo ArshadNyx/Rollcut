@@ -77,3 +77,20 @@ describe('toAss', () => {
     expect(toAss([{ startMs: 0, endMs: 1000, text: long }])).toContain('\\N');
   });
 });
+
+describe('font selection', () => {
+  it('names a font that resolves on macOS, Windows and Linux runners', () => {
+    // Helvetica does not exist on ubuntu runners; libass would substitute a
+    // wider face and the same spec would wrap differently in CI.
+    expect(DEFAULT_STYLE.fontName).toBe('Arial');
+    expect(toAss([{ startMs: 0, endMs: 1000, text: 'hi' }])).toContain('Style: Rollcut,Arial,');
+  });
+
+  it('lets a caller override the font', () => {
+    const ass = toAss([{ startMs: 0, endMs: 1000, text: 'hi' }], {
+      ...DEFAULT_STYLE,
+      fontName: 'Inter',
+    });
+    expect(ass).toContain('Style: Rollcut,Inter,');
+  });
+});
