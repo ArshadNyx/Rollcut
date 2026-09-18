@@ -1,6 +1,6 @@
 name: Rollcut
 description: Tag a release, get a trailer. Records a narrated demo video of your app and attaches it to the release.
-author: rollcut
+author: ArshadNyx
 
 branding:
   icon: film
