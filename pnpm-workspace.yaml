@@ -1,0 +1,7 @@
+allowBuilds:
+  esbuild: true
+  ffmpeg-static: true
+  # kokoro-js pulls onnxruntime-node, which ships a native binary.
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: true

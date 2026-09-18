@@ -1,0 +1,6 @@
+dist/
+out/
+pnpm-lock.yaml
+pnpm-workspace.yaml
+CLAUDE.md
+.claude/

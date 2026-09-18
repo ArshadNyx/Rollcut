@@ -1,0 +1,21 @@
+# Dogfood: Rollcut records its own demo on every release.
+name: Demo
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: rollcut
+        with:
+          spec: demos/excalidraw.yaml
+          token: ${{ github.token }}
+      - run: echo "Recorded ${{ steps.rollcut.outputs.duration-seconds }}s → ${{ steps.rollcut.outputs.mp4 }}"

@@ -1,0 +1,11 @@
+node_modules/
+out/
+*.log
+.DS_Store
+
+# Local Claude Code / tooling state
+.claude/settings.local.json
+.claude-flow/
+
+# dist/ is intentionally committed: the composite action runs
+# `node dist/action.js` straight from the checked-out repo.

@@ -1,0 +1,99 @@
+name: Rollcut
+description: Tag a release, get a trailer. Records a narrated demo video of your app and attaches it to the release.
+author: rollcut
+
+branding:
+  icon: film
+  color: purple
+
+inputs:
+  spec:
+    description: Path to the Rollcut YAML spec.
+    required: true
+  url:
+    description: Overrides the spec's baseUrl. Use for preview deployments.
+    required: false
+  attach-to-release:
+    description: Upload demo.mp4 and demo.gif to the release that triggered this run.
+    required: false
+    default: 'true'
+  update-readme:
+    description: Commit a badge and GIF embed to the README. Not implemented yet (phase 4).
+    required: false
+    default: 'false'
+  voice:
+    description: Voice name. Provider-specific — kokoro uses names like af_heart.
+    required: false
+  tts:
+    description: TTS provider — kokoro (local, default) or edge (unofficial Microsoft endpoint).
+    required: false
+    default: 'kokoro'
+  narration:
+    description: Set to false to record a silent video and skip TTS entirely.
+    required: false
+    default: 'true'
+  subtitles:
+    description: Burn subtitles into the mp4.
+    required: false
+    default: 'true'
+  out:
+    description: Output directory for demo.mp4 and demo.gif.
+    required: false
+    default: 'out'
+  token:
+    description: Token used to upload release assets.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  mp4:
+    description: Path to the generated MP4.
+    value: ${{ steps.record.outputs.mp4 }}
+  gif:
+    description: Path to the generated GIF.
+    value: ${{ steps.record.outputs.gif }}
+  duration-seconds:
+    description: Video duration in seconds.
+    value: ${{ steps.record.outputs.duration-seconds }}
+  asset-urls:
+    description: Newline-separated browser download URLs of the uploaded assets.
+    value: ${{ steps.record.outputs.asset-urls }}
+
+# Composite rather than a bundled JS action: Chromium and the ONNX runtime are
+# native and platform-specific, so they cannot be bundled and must be installed
+# on the runner. See README for the trade-off.
+runs:
+  using: composite
+  steps:
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install Rollcut dependencies
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        corepack enable
+        pnpm install --prod --frozen-lockfile
+
+    - name: Install Chromium
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: pnpm exec playwright install --with-deps chromium
+
+    - name: Record demo
+      id: record
+      shell: bash
+      run: node "${{ github.action_path }}/dist/action.js"
+      env:
+        INPUT_SPEC: ${{ inputs.spec }}
+        INPUT_URL: ${{ inputs.url }}
+        INPUT_ATTACH-TO-RELEASE: ${{ inputs.attach-to-release }}
+        INPUT_UPDATE-README: ${{ inputs.update-readme }}
+        INPUT_VOICE: ${{ inputs.voice }}
+        INPUT_TTS: ${{ inputs.tts }}
+        INPUT_NARRATION: ${{ inputs.narration }}
+        INPUT_SUBTITLES: ${{ inputs.subtitles }}
+        INPUT_OUT: ${{ inputs.out }}
+        INPUT_TOKEN: ${{ inputs.token }}

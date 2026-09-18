@@ -1,0 +1,19 @@
+# Second demo: a content site rather than a canvas app, so it exercises
+# scroll, hover and waitFor against real markup.
+baseUrl: https://vitest.dev
+viewport: { width: 1280, height: 720 }
+pauseMs: 700
+steps:
+  - navigate: /
+    note: 'Vitest is a fast test runner built on Vite.'
+  - waitFor: "a[href='/guide/']"
+  - hover: "a[href='/guide/']"
+    note: 'The guide walks you through getting started.'
+  - scroll: 600
+    note: 'The homepage highlights why it is fast.'
+  - scroll: 600
+  - click: "a[href='/guide/']"
+    note: 'Open the guide.'
+  - waitFor: 'h1'
+  - scroll: 500
+    note: 'And here is the documentation.'

@@ -1,0 +1,46 @@
+{
+  "name": "rollcut",
+  "version": "0.1.0",
+  "description": "Tag a release, get a trailer.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "rollcut": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "rollcut": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:e2e": "vitest run --dir test/e2e",
+    "lint": "eslint src test",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@actions/core": "^3.0.1",
+    "@actions/github": "^9.1.1",
+    "@playwright/test": "^1.49.0",
+    "ffmpeg-static": "^5.2.0",
+    "js-yaml": "^4.1.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.0",
+    "eslint": "^10.10.0",
+    "prettier": "^3.9.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^2.1.8"
+  },
+  "files": [
+    "dist",
+    "action.yml",
+    "demos",
+    "README.md"
+  ],
+  "optionalDependencies": {
+    "kokoro-js": "^1.2.1"
+  }
+}

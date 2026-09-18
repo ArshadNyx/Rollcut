@@ -1,0 +1,17 @@
+baseUrl: https://excalidraw.com
+viewport: { width: 1280, height: 720 }
+pauseMs: 700
+steps:
+  - navigate: /
+    note: 'This is Excalidraw, a whiteboard that runs in the browser.'
+  - wait: 1500
+  - click: "[title^='Rectangle']"
+    note: 'Pick the rectangle tool.'
+  - drag: { from: [420, 260], to: [760, 470] }
+    note: 'Draw a shape on the canvas.'
+  - click: "[title^='Text']"
+  - clickAt: [590, 360]
+  - type: 'Hello from Rollcut'
+    note: 'Add a label.'
+  - press: Escape
+  - wait: 1200
