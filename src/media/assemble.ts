@@ -20,10 +20,15 @@ export interface AssembleOptions {
 export interface AssembleResult {
   mp4: string;
   gif: string;
+  /** Set when the GIF exceeds GIF_MAX_BYTES, so callers can warn. */
+  gifOversize: boolean;
   srt: string | undefined;
   durationSeconds: number;
   narrated: boolean;
 }
+
+/** Above this a GIF stops being embeddable in a README. */
+export const GIF_MAX_BYTES = 8_000_000;
 
 const GIF_FPS = 12;
 const GIF_WIDTH = 800;
@@ -137,10 +142,11 @@ export async function assemble(raw: string, options: AssembleOptions): Promise<A
   const gif = await toGif(raw, join(outDir, 'demo.gif'));
 
   await stat(mp4);
-  await stat(gif);
+  const gifStat = await stat(gif);
   return {
     mp4,
     gif,
+    gifOversize: gifStat.size > GIF_MAX_BYTES,
     srt: srtOut,
     durationSeconds: await probeDurationSeconds(mp4),
     narrated,

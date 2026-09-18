@@ -71,7 +71,7 @@ async function main() {
     const [m, g] = await Promise.all([stat(result.mp4), stat(result.gif)]);
     console.log(`\n${result.mp4}  ${human(m.size)}  ${result.durationSeconds.toFixed(1)}s  ` +
         `${result.narrated ? `narrated (${result.lines} lines)` : 'silent'}`);
-    console.log(`${result.gif}  ${human(g.size)}  silent`);
+    console.log(`${result.gif}  ${human(g.size)}  silent${result.gifOversize ? '  ⚠ over 8 MB — too large to embed in a README' : ''}`);
     if (result.srt)
         console.log(`${result.srt}`);
     console.log(`done in ${((Date.now() - started) / 1000).toFixed(1)}s`);

@@ -86,6 +86,11 @@ Any step may carry a `note`. Notes become narration and subtitles; steps without
 
 Outputs: `mp4`, `gif`, `duration-seconds`, `asset-urls`.
 
+With `update-readme: true`, Rollcut maintains a block in your README between
+`<!-- rollcut:start -->` and `<!-- rollcut:end -->` markers. If the markers are
+absent it inserts the block under your first heading; on later releases it
+replaces the block in place rather than stacking duplicates.
+
 ## Narration
 
 Two providers sit behind one interface (`src/tts/provider.ts`):

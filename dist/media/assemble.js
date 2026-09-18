@@ -2,6 +2,8 @@ import { stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ffmpeg } from './ffmpeg.js';
 import { DEFAULT_STYLE, toAss, toSrt } from './subtitles.js';
+/** Above this a GIF stops being embeddable in a README. */
+export const GIF_MAX_BYTES = 8_000_000;
 const GIF_FPS = 12;
 const GIF_WIDTH = 800;
 /** libass paths travel through a filter string; colons and backslashes bite. */
@@ -96,10 +98,11 @@ export async function assemble(raw, options) {
     const narrated = await toMp4(raw, mp4, { cues, assPath });
     const gif = await toGif(raw, join(outDir, 'demo.gif'));
     await stat(mp4);
-    await stat(gif);
+    const gifStat = await stat(gif);
     return {
         mp4,
         gif,
+        gifOversize: gifStat.size > GIF_MAX_BYTES,
         srt: srtOut,
         durationSeconds: await probeDurationSeconds(mp4),
         narrated,

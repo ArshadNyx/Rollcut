@@ -18,7 +18,7 @@ inputs:
     required: false
     default: 'true'
   update-readme:
-    description: Commit a badge and GIF embed to the README. Not implemented yet (phase 4).
+    description: Commit a badge and GIF embed to the README. Requires attach-to-release and contents:write.
     required: false
     default: 'false'
   voice:
@@ -66,9 +66,31 @@ runs:
   using: composite
   steps:
     - name: Set up Node
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v5
       with:
         node-version: '20'
+
+    - name: Resolve cache keys
+      id: keys
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        echo "lock=$(shasum -a 256 pnpm-lock.yaml | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+        echo "store=$(corepack pnpm store path 2>/dev/null || echo ~/.local/share/pnpm/store)" >> "$GITHUB_OUTPUT"
+
+    # Chromium, the pnpm store and the TTS weights are ~900 MB combined and
+    # never change between runs; without these a cold runner re-fetches the lot
+    # on every release.
+    - name: Restore caches
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ steps.keys.outputs.store }}
+          ~/.cache/ms-playwright
+          ~/.cache/huggingface
+        key: rollcut-${{ runner.os }}-${{ steps.keys.outputs.lock }}
+        restore-keys: |
+          rollcut-${{ runner.os }}-
 
     - name: Install Rollcut dependencies
       shell: bash
