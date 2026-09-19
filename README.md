@@ -72,17 +72,17 @@ Any step may carry a `note`. Notes become narration and subtitles; steps without
 
 ## Action inputs
 
-| Input               | Default               | Description                                   |
-| ------------------- | --------------------- | --------------------------------------------- |
-| `spec`              | _required_            | Path to the YAML spec.                        |
-| `url`               | —                     | Overrides `baseUrl`, for preview deployments. |
-| `attach-to-release` | `true`                | Upload the assets to the triggering release.  |
-| `update-readme`     | `false`               | Not implemented yet.                          |
-| `voice`             | —                     | Provider-specific voice name.                 |
-| `tts`               | `kokoro`              | `kokoro` (local) or `edge`.                   |
-| `narration`         | `true`                | Set `false` for a silent video.               |
-| `subtitles`         | `true`                | Burn subtitles into the MP4.                  |
-| `token`             | `${{ github.token }}` | Used to upload release assets.                |
+| Input               | Default               | Description                                                                                                                   |
+| ------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `spec`              | _required_            | Path to the YAML spec.                                                                                                        |
+| `url`               | —                     | Overrides `baseUrl`, for preview deployments.                                                                                 |
+| `attach-to-release` | `true`                | Upload the assets to the triggering release.                                                                                  |
+| `update-readme`     | `false`               | Commit a badge + GIF embed to the README. Needs `attach-to-release` and `contents: write`. **Public repos only** — see below. |
+| `voice`             | —                     | Provider-specific voice name.                                                                                                 |
+| `tts`               | `kokoro`              | `kokoro` (local) or `edge`.                                                                                                   |
+| `narration`         | `true`                | Set `false` for a silent video.                                                                                               |
+| `subtitles`         | `true`                | Burn subtitles into the MP4.                                                                                                  |
+| `token`             | `${{ github.token }}` | Used to upload release assets.                                                                                                |
 
 Outputs: `mp4`, `gif`, `duration-seconds`, `asset-urls`.
 
@@ -92,6 +92,12 @@ it inserts the block under your first heading; on later releases it replaces the
 block in place rather than stacking duplicates. Markers are only recognised when
 they sit alone on a line, so prose that mentions them (like this paragraph) is
 left alone.
+
+**This only works on public repositories.** The embed points at release assets,
+and GitHub renders README images through a proxy that is not authenticated
+against your repository — on a private repo the GIF resolves to a broken image.
+Rollcut warns and carries on rather than failing the release. If your repo is
+private, commit the GIF into the repository and embed that path instead.
 
 ## Narration
 

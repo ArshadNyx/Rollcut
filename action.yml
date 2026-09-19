@@ -18,7 +18,11 @@ inputs:
     required: false
     default: 'true'
   update-readme:
-    description: Commit a badge and GIF embed to the README. Requires attach-to-release and contents:write.
+    description: >-
+      Commit a badge and GIF embed to the README. Requires attach-to-release and
+      contents:write. The embed points at release assets, which GitHub's image
+      proxy cannot read on a private repository, so it renders as a broken image
+      there — use it on public repos.
     required: false
     default: 'false'
   voice:

@@ -78,6 +78,13 @@ async function main() {
             core.warning('update-readme needs attach-to-release to be on, so the embed has URLs to point at. Skipped.');
         }
         else {
+            // Release-asset URLs are not readable by GitHub's image proxy on a
+            // private repo, so the embed renders broken. Warn, but still commit:
+            // the repo may be made public later.
+            if (context.payload.repository?.private) {
+                core.warning('update-readme embeds release assets, which do not render on a private repository. ' +
+                    'The block will be committed but the GIF will show as broken until the repo is public.');
+            }
             const tag = context.ref.startsWith('refs/tags/')
                 ? context.ref.slice('refs/tags/'.length)
                 : (context.payload.release?.tag_name ?? 'latest');
