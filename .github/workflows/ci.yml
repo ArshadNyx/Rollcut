@@ -44,6 +44,25 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '20'
+      # Actions caches are scoped per ref, and only the default branch's caches
+      # are readable from every other ref. Release runs happen on tag refs, so
+      # they can never reuse a cache written by another tag — this job on main
+      # is what actually populates the cache the Action restores.
+      - name: Resolve cache keys
+        id: keys
+        run: |
+          echo "lock=$(shasum -a 256 pnpm-lock.yaml | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "store=$(corepack pnpm store path 2>/dev/null || echo ~/.local/share/pnpm/store)" >> "$GITHUB_OUTPUT"
+      - name: Cache browser, pnpm store and TTS weights
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.keys.outputs.store }}
+            ~/.cache/ms-playwright
+            ~/.cache/huggingface
+          key: rollcut-${{ runner.os }}-${{ steps.keys.outputs.lock }}
+          restore-keys: |
+            rollcut-${{ runner.os }}-
       - name: Install
         run: |
           corepack enable
@@ -52,3 +71,11 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Integration tests
         run: pnpm test:e2e
+      - name: Warm the TTS model cache
+        # The e2e tests run silent, so nothing else pulls the weights that every
+        # narrated release needs.
+        run: |
+          node --import tsx -e "
+            import { kokoroTts } from './src/tts/kokoro.ts';
+            await kokoroTts.synthesize('Warming the model cache.', undefined, '/tmp/warm.wav');
+          "

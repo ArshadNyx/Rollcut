@@ -118,6 +118,15 @@ rollcut record <spec.yaml> [options]
 
 Set `ROLLCUT_DEBUG=1` to see every ffmpeg invocation in full.
 
+## Caching in CI
+
+The Action restores the pnpm store, Chromium and the TTS weights from
+`actions/cache`. GitHub scopes caches per ref and only the default branch's
+caches are readable from every other ref, so a release running on a tag can
+never reuse a cache written by another tag. This repository's CI workflow
+populates that cache on `main`; if you fork Rollcut, keep a workflow on your
+default branch doing the same or every release will start cold.
+
 ## Philosophy
 
 Demo videos rot. They are recorded once, by hand, and are wrong by the next release. Rollcut makes the demo a build artifact: it is regenerated from a spec on every tag, so it is either current or it fails loudly.
