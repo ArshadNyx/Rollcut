@@ -19,7 +19,7 @@ jobs:
     permissions: { contents: write }
     steps:
       - uses: actions/checkout@v4
-      - uses: ArshadNyx/rollcut@v1
+      - uses: ArshadNyx/Rollcut@v1
         with:
           spec: demos/app.yaml
           url: https://app.example.com

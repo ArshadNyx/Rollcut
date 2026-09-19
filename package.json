@@ -42,5 +42,13 @@
   ],
   "optionalDependencies": {
     "kokoro-js": "^1.2.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArshadNyx/Rollcut.git"
+  },
+  "homepage": "https://rollcut.dev",
+  "bugs": {
+    "url": "https://github.com/ArshadNyx/Rollcut/issues"
   }
 }
