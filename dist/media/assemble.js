@@ -20,17 +20,21 @@ export async function toMp4(raw, outPath, options) {
     // `apad` produces an endless stream and `-shortest` does not reliably stop a
     // filter_complex output, so the capture's own length is the hard bound.
     const videoSeconds = await probeDurationSeconds(raw);
+    const fps = await probeFrameRate(raw);
     const args = ['-i', raw];
     for (const cue of cues)
         args.push('-i', cue.wavPath);
     const chains = [];
-    let video = 'scale=trunc(iw/2)*2:trunc(ih/2)*2,fps=30';
+    // No fps conversion: resampling 25 -> 30 duplicates every fifth frame, and a
+    // duplicate mid-zoom reads as a stutter.
+    let video = 'scale=trunc(iw/2)*2:trunc(ih/2)*2';
     // Zoom before subtitles, so the text is burned at full size onto the final
     // frame rather than being magnified along with the page.
     const zoom = options.viewport &&
         buildZoomFilter(options.zooms ?? [], {
             width: options.viewport.width,
             height: options.viewport.height,
+            fps,
         });
     if (zoom)
         video += `,${zoom}`;
@@ -72,6 +76,32 @@ export async function toGif(raw, outPath, zoom) {
     await ffmpeg(['-i', raw, '-filter_complex', filters, '-loop', '0', outPath]);
     return outPath;
 }
+/**
+ * Frames per second of a capture.
+ *
+ * Resampling to a different rate duplicates frames, and a duplicated frame in
+ * the middle of a zoom reads as a stutter — so the output keeps the rate it
+ * was recorded at.
+ */
+export async function probeFrameRate(file, fallback = 25) {
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const ffmpegStatic = (await import('ffmpeg-static')).default;
+    const run = promisify(execFile);
+    try {
+        const { stderr } = await run(process.env.ROLLCUT_FFMPEG || ffmpegStatic, [
+            '-hide_banner',
+            '-i',
+            file,
+        ]).catch((e) => ({ stderr: e.stderr ?? '' }));
+        const m = /,\s*([0-9]+(?:\.[0-9]+)?)\s*fps/.exec(stderr ?? '');
+        const fps = m?.[1] ? Number(m[1]) : Number.NaN;
+        return Number.isFinite(fps) && fps > 0 ? fps : fallback;
+    }
+    catch {
+        return fallback;
+    }
+}
 export async function probeDurationSeconds(file) {
     const { execFile } = await import('node:child_process');
     const { promisify } = await import('node:util');
@@ -108,6 +138,7 @@ export async function assemble(raw, options) {
     const zoomFilter = buildZoomFilter(options.zooms ?? [], {
         width: style.width,
         height: style.height,
+        fps: await probeFrameRate(raw),
     });
     const mp4 = join(outDir, 'demo.mp4');
     const narrated = await toMp4(raw, mp4, {

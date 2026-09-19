@@ -1,5 +1,5 @@
 export const ZOOM_SCALE = 1.15;
-export const ZOOM_TIMING = { inMs: 420, holdMs: 520, outMs: 680 };
+export const ZOOM_TIMING = { inMs: 620, holdMs: 520, outMs: 820 };
 export const ZOOM_TOTAL_MS = ZOOM_TIMING.inMs + ZOOM_TIMING.holdMs + ZOOM_TIMING.outMs;
 /** Smoothstep: eases both ends, so nothing starts or stops abruptly. */
 function smoothstep(progress) {
@@ -65,10 +65,18 @@ export function buildZoomFilter(events, options) {
     const focusY = `(${usable
         .map((e) => `${e.y.toFixed(1)}*(${envelope(e, timing)})`)
         .join('+')})/${weight}`;
-    const x = `clip((${focusX})*(1-1/${z}),0,iw-iw/${z})`;
-    const y = `clip((${focusY})*(1-1/${z}),0,ih-ih/${z})`;
+    const ss = options.supersample ?? 2;
+    const fx = ss > 1 ? `(${focusX})*${ss}` : `(${focusX})`;
+    const fy = ss > 1 ? `(${focusY})*${ss}` : `(${focusY})`;
+    const x = `clip(${fx}*(1-1/${z}),0,iw-iw/${z})`;
+    const y = `clip(${fy}*(1-1/${z}),0,ih-ih/${z})`;
+    // zoompan rounds its source window to whole pixels. At a 1.15x zoom that
+    // rounding is a visible wobble, so the frame is supersampled first: the same
+    // rounding then lands on half a source pixel instead of a whole one.
+    const supersample = options.supersample ?? 2;
+    const prefix = supersample > 1 ? `scale=iw*${supersample}:ih*${supersample}:flags=bicubic,` : '';
     // d=1 makes zoompan emit one frame per input frame instead of holding each
     // one for a pan; without it a short clip stretches to minutes.
-    return `zoompan=z='${z}':x='${x}':y='${y}':d=1:s=${width}x${height}:fps=${fps}`;
+    return `${prefix}zoompan=z='${z}':x='${x}':y='${y}':d=1:s=${width}x${height}:fps=${fps}`;
 }
 //# sourceMappingURL=zoom.js.map
