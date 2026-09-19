@@ -18,4 +18,6 @@ jobs:
         with:
           spec: demos/excalidraw.yaml
           token: ${{ github.token }}
+          # Rollcut maintains the demo block in our own README.
+          update-readme: true
       - run: echo "Recorded ${{ steps.rollcut.outputs.duration-seconds }}s → ${{ steps.rollcut.outputs.mp4 }}"
