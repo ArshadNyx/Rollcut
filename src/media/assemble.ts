@@ -2,6 +2,7 @@ import { stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ffmpeg } from './ffmpeg.js';
 import { DEFAULT_STYLE, toAss, toSrt, type Cue } from './subtitles.js';
+import { buildZoomFilter, type ZoomEvent } from './zoom.js';
 
 export interface NarrationCue extends Cue {
   wavPath: string;
@@ -15,6 +16,8 @@ export interface AssembleOptions {
   subtitles?: boolean;
   /** Video size, so subtitle sizing matches the frame. */
   viewport?: { width: number; height: number };
+  /** Clicks to zoom toward. */
+  zooms?: ZoomEvent[];
 }
 
 export interface AssembleResult {
@@ -45,17 +48,37 @@ function escapeForFilter(path: string): string {
 export async function toMp4(
   raw: string,
   outPath: string,
-  options: { cues: NarrationCue[]; assPath?: string },
+  options: {
+    cues: NarrationCue[];
+    assPath?: string;
+    zooms?: ZoomEvent[];
+    viewport?: { width: number; height: number };
+  },
 ): Promise<boolean> {
   const { cues, assPath } = options;
   // `apad` produces an endless stream and `-shortest` does not reliably stop a
   // filter_complex output, so the capture's own length is the hard bound.
   const videoSeconds = await probeDurationSeconds(raw);
+  const fps = await probeFrameRate(raw);
   const args: string[] = ['-i', raw];
   for (const cue of cues) args.push('-i', cue.wavPath);
 
   const chains: string[] = [];
-  let video = 'scale=trunc(iw/2)*2:trunc(ih/2)*2,fps=30';
+  // No fps conversion: resampling 25 -> 30 duplicates every fifth frame, and a
+  // duplicate mid-zoom reads as a stutter.
+  let video = 'scale=trunc(iw/2)*2:trunc(ih/2)*2';
+
+  // Zoom before subtitles, so the text is burned at full size onto the final
+  // frame rather than being magnified along with the page.
+  const zoom =
+    options.viewport &&
+    buildZoomFilter(options.zooms ?? [], {
+      width: options.viewport.width,
+      height: options.viewport.height,
+      fps,
+    });
+  if (zoom) video += `,${zoom}`;
+
   // The ASS file carries its own styling and resolution, so no force_style.
   if (assPath) video += `,ass='${escapeForFilter(assPath)}'`;
   chains.push(`[0:v]${video}[v]`);
@@ -94,13 +117,39 @@ export async function toMp4(
 }
 
 /** Palette-based GIF so gradients and UI chrome do not band. The GIF is silent. */
-export async function toGif(raw: string, outPath: string): Promise<string> {
+export async function toGif(raw: string, outPath: string, zoom?: string): Promise<string> {
   const filters =
-    `fps=${GIF_FPS},scale=${GIF_WIDTH}:-1:flags=lanczos,split[s0][s1];` +
+    `${zoom ? `${zoom},` : ''}fps=${GIF_FPS},scale=${GIF_WIDTH}:-1:flags=lanczos,split[s0][s1];` +
     `[s0]palettegen=max_colors=192:stats_mode=diff[p];` +
     `[s1][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`;
   await ffmpeg(['-i', raw, '-filter_complex', filters, '-loop', '0', outPath]);
   return outPath;
+}
+
+/**
+ * Frames per second of a capture.
+ *
+ * Resampling to a different rate duplicates frames, and a duplicated frame in
+ * the middle of a zoom reads as a stutter — so the output keeps the rate it
+ * was recorded at.
+ */
+export async function probeFrameRate(file: string, fallback = 25): Promise<number> {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const ffmpegStatic = (await import('ffmpeg-static')).default as unknown as string;
+  const run = promisify(execFile);
+  try {
+    const { stderr } = await run(process.env.ROLLCUT_FFMPEG || ffmpegStatic, [
+      '-hide_banner',
+      '-i',
+      file,
+    ]).catch((e: { stderr?: string }) => ({ stderr: e.stderr ?? '' }));
+    const m = /,\s*([0-9]+(?:\.[0-9]+)?)\s*fps/.exec(stderr ?? '');
+    const fps = m?.[1] ? Number(m[1]) : Number.NaN;
+    return Number.isFinite(fps) && fps > 0 ? fps : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export async function probeDurationSeconds(file: string): Promise<number> {
@@ -137,9 +186,21 @@ export async function assemble(raw: string, options: AssembleOptions): Promise<A
     await writeFile(srtOut, toSrt(cues), 'utf8');
   }
 
+  // The GIF gets the same zoom, so the two tell the same story.
+  const zoomFilter = buildZoomFilter(options.zooms ?? [], {
+    width: style.width,
+    height: style.height,
+    fps: await probeFrameRate(raw),
+  });
+
   const mp4 = join(outDir, 'demo.mp4');
-  const narrated = await toMp4(raw, mp4, { cues, assPath });
-  const gif = await toGif(raw, join(outDir, 'demo.gif'));
+  const narrated = await toMp4(raw, mp4, {
+    cues,
+    assPath,
+    zooms: options.zooms,
+    viewport: style,
+  });
+  const gif = await toGif(raw, join(outDir, 'demo.gif'), zoomFilter);
 
   await stat(mp4);
   const gifStat = await stat(gif);

@@ -1,6 +1,7 @@
 import yaml from 'js-yaml';
 import { specSchema } from '../spec/schema.js';
 import { normalisePath, observeSite, } from './observe.js';
+import { verify } from './verify.js';
 const MAX_STEPS = 14;
 /**
  * The spec format is a union of single-key objects, which models get wrong in
@@ -330,11 +331,25 @@ export async function plan(options) {
             .map((i) => `${i.path.join('.')}: ${i.message}`)
             .join('; ')}`);
     }
+    let final = parsed.data;
+    let failures = [];
+    const shouldVerify = options.verify !== false;
+    if (shouldVerify) {
+        log('verifying the plan in a browser…');
+        const result = await verify(final, {
+            viewport,
+            onStep: (n, kind, ok, reason) => log(`  step ${n}: ${kind} ${ok ? 'ok' : `failed — ${reason}`}`),
+        });
+        final = result.spec;
+        failures = result.failures;
+    }
     return {
-        spec: parsed.data,
-        yaml: yaml.dump(parsed.data, { lineWidth: 100, quotingType: '"' }),
+        spec: final,
+        yaml: yaml.dump(final, { lineWidth: 100, quotingType: '"' }),
         site,
         rejected,
+        failures,
+        verified: shouldVerify,
     };
 }
 //# sourceMappingURL=planner.js.map

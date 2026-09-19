@@ -33,9 +33,19 @@ async function centerOf(page, selector, stepNumber) {
         throw new Error(`Selector \`${selector}\` matched on step ${stepNumber} but has no on-screen box — it may be hidden or zero-sized. Pick a visible element.`);
     }
     const point = [box.x + box.width / 2, box.y + box.height / 2];
-    const view = page.viewportSize();
-    if (view && (point[0] < 0 || point[1] < 0 || point[0] > view.width || point[1] > view.height)) {
-        throw new Error(`Selector \`${selector}\` on step ${stepNumber} sits outside the viewport at (${Math.round(point[0])}, ${Math.round(point[1])}) even after scrolling — it may be in a fixed overlay or a scroll container. Try a \`scroll\` step first.`);
+    // Driving the real mouse means Playwright's actionability checks are skipped,
+    // so a covered element would be "clicked" through whatever sits on top of it —
+    // silently producing a demo of the wrong thing. Check we would actually hit it.
+    const covering = await locator
+        .evaluate((el, at) => {
+        const top = document.elementFromPoint(at.x, at.y);
+        if (!top || el === top || el.contains(top) || top.contains(el))
+            return null;
+        return top.tagName.toLowerCase() + (top.id ? '#' + top.id : '');
+    }, { x: point[0], y: point[1] })
+        .catch(() => null);
+    if (covering) {
+        throw new Error(`Selector \`${selector}\` on step ${stepNumber} is covered by \`${covering}\` — a click there would hit that instead. Dismiss the overlay first, or pick a different element.`);
     }
     return point;
 }
@@ -48,11 +58,13 @@ export async function click(page, selector, stepNumber) {
     await glide(page, point);
     await page.mouse.down();
     await page.mouse.up();
+    return point;
 }
 export async function clickAt(page, point) {
     await glide(page, point);
     await page.mouse.down();
     await page.mouse.up();
+    return point;
 }
 export async function drag(page, from, to) {
     await glide(page, from);
@@ -103,5 +115,54 @@ export async function waitFor(page, selector, stepNumber) {
     catch {
         throw new Error(`Timed out after 15s waiting for \`${selector}\` on step ${stepNumber} — check the selector, or whether the app needs a different trigger first.`);
     }
+}
+/**
+ * Perform one step.
+ *
+ * Shared by the recorder and by plan verification on purpose: verifying a spec
+ * with different logic than the one that records it would prove nothing.
+ */
+/**
+ * Perform one step, returning where a click landed so the caller can aim the
+ * zoom that is applied to the finished recording.
+ */
+export async function executeStep(page, step, stepNumber, options) {
+    if ('navigate' in step) {
+        await navigate(page, options.baseUrl, step.navigate);
+        if (options.settle) {
+            await page.waitForLoadState('load').catch(() => undefined);
+            await wait(1200);
+        }
+        await options.onNavigated?.(page);
+        resetPointer();
+    }
+    else if ('click' in step) {
+        return await click(page, step.click, stepNumber);
+    }
+    else if ('clickAt' in step) {
+        return await clickAt(page, step.clickAt);
+    }
+    else if ('drag' in step) {
+        await drag(page, step.drag.from, step.drag.to);
+    }
+    else if ('type' in step) {
+        await type(page, step.type);
+    }
+    else if ('press' in step) {
+        await press(page, step.press);
+    }
+    else if ('wait' in step) {
+        await wait(step.wait);
+    }
+    else if ('scroll' in step) {
+        await scroll(page, step.scroll, stepNumber);
+    }
+    else if ('hover' in step) {
+        await hover(page, step.hover, stepNumber);
+    }
+    else if ('waitFor' in step) {
+        await waitFor(page, step.waitFor, stepNumber);
+    }
+    return undefined;
 }
 //# sourceMappingURL=steps.js.map

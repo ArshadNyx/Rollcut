@@ -41,7 +41,7 @@ export async function runPipeline(options) {
                 narration.set(clip.stepIndex, clip);
         }
     }
-    const { raw, cues } = await record(spec, {
+    const { raw, cues, zooms } = await record(spec, {
         workDir,
         url: options.url,
         narration,
@@ -54,6 +54,7 @@ export async function runPipeline(options) {
         cues,
         subtitles: options.subtitles,
         viewport: spec.viewport,
+        zooms,
     });
     await rm(workDir, { recursive: true, force: true });
     return { ...result, steps: spec.steps.length, lines: cues.length };

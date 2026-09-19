@@ -149,8 +149,15 @@ written instruction:
   changes nothing.
 - The result is validated against the same zod schema a hand-written spec goes
   through. The planner gets no special treatment.
+- **The proposed spec is then replayed in a real browser** and any step that
+  fails is dropped. Static checks can only prove a selector was on the page
+  when we looked; whether the step actually works — the element is reachable,
+  nothing covers it, the app is in the right state — is only answerable by
+  doing it. Steps replay through the same executor the recorder uses, so a
+  pass here means the same thing it will during recording. Skip it with
+  `--no-verify` if you would rather read the raw proposal.
 
-Even so, **read what it proposes**. The plumbing guarantees a runnable spec, not
+Even so, **read what it proposes**. The checks guarantee a runnable spec, not
 an interesting one — whether the walkthrough is worth watching is still a
 judgement call, and that is why a human confirms.
 
@@ -227,6 +234,15 @@ rollcut plan <url> [options]
 ```
 
 Set `ROLLCUT_DEBUG=1` to see every ffmpeg invocation in full.
+
+## Why the zoom is applied afterwards
+
+The soft zoom on each click is applied to the finished recording with ffmpeg,
+not to the live page. A CSS transform on `<html>` makes `position: fixed`
+resolve against the transformed element, so a sticky header detaches from the
+viewport and — on a scrolled page — disappears entirely for the length of the
+zoom. Cropping the capture afterwards cannot disturb a layout that has already
+been recorded, and it is what screen recorders do anyway.
 
 ## How this repo tests itself
 

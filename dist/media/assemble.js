@@ -2,6 +2,7 @@ import { stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ffmpeg } from './ffmpeg.js';
 import { DEFAULT_STYLE, toAss, toSrt } from './subtitles.js';
+import { buildZoomFilter } from './zoom.js';
 /** Above this a GIF stops being embeddable in a README. */
 export const GIF_MAX_BYTES = 8_000_000;
 const GIF_FPS = 12;
@@ -24,6 +25,15 @@ export async function toMp4(raw, outPath, options) {
         args.push('-i', cue.wavPath);
     const chains = [];
     let video = 'scale=trunc(iw/2)*2:trunc(ih/2)*2,fps=30';
+    // Zoom before subtitles, so the text is burned at full size onto the final
+    // frame rather than being magnified along with the page.
+    const zoom = options.viewport &&
+        buildZoomFilter(options.zooms ?? [], {
+            width: options.viewport.width,
+            height: options.viewport.height,
+        });
+    if (zoom)
+        video += `,${zoom}`;
     // The ASS file carries its own styling and resolution, so no force_style.
     if (assPath)
         video += `,ass='${escapeForFilter(assPath)}'`;
@@ -55,8 +65,8 @@ export async function toMp4(raw, outPath, options) {
     return cues.length > 0;
 }
 /** Palette-based GIF so gradients and UI chrome do not band. The GIF is silent. */
-export async function toGif(raw, outPath) {
-    const filters = `fps=${GIF_FPS},scale=${GIF_WIDTH}:-1:flags=lanczos,split[s0][s1];` +
+export async function toGif(raw, outPath, zoom) {
+    const filters = `${zoom ? `${zoom},` : ''}fps=${GIF_FPS},scale=${GIF_WIDTH}:-1:flags=lanczos,split[s0][s1];` +
         `[s0]palettegen=max_colors=192:stats_mode=diff[p];` +
         `[s1][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`;
     await ffmpeg(['-i', raw, '-filter_complex', filters, '-loop', '0', outPath]);
@@ -94,9 +104,19 @@ export async function assemble(raw, options) {
         srtOut = join(outDir, 'demo.srt');
         await writeFile(srtOut, toSrt(cues), 'utf8');
     }
+    // The GIF gets the same zoom, so the two tell the same story.
+    const zoomFilter = buildZoomFilter(options.zooms ?? [], {
+        width: style.width,
+        height: style.height,
+    });
     const mp4 = join(outDir, 'demo.mp4');
-    const narrated = await toMp4(raw, mp4, { cues, assPath });
-    const gif = await toGif(raw, join(outDir, 'demo.gif'));
+    const narrated = await toMp4(raw, mp4, {
+        cues,
+        assPath,
+        zooms: options.zooms,
+        viewport: style,
+    });
+    const gif = await toGif(raw, join(outDir, 'demo.gif'), zoomFilter);
     await stat(mp4);
     const gifStat = await stat(gif);
     return {

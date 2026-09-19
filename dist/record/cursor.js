@@ -1,11 +1,13 @@
-export const ZOOM_SCALE = 1.15;
-export const ZOOM_MS = 600;
 /**
  * Script injected into every document (including after navigation) that draws
- * an SVG cursor following the real mouse, a click ripple, and a soft zoom that
- * eases back over ZOOM_MS.
+ * an SVG cursor following the real mouse, plus a ripple on click.
+ *
+ * Deliberately does not zoom: a CSS transform on `<html>` makes
+ * `position: fixed` resolve against the transformed element, so sticky headers
+ * detach and vanish. The zoom is applied to the finished recording instead —
+ * see media/zoom.ts.
  */
-function overlayScript(scale, zoomMs) {
+function overlayScript() {
     return `
 (() => {
   if (window.__rollcutCursor) return;
@@ -41,7 +43,6 @@ function overlayScript(scale, zoomMs) {
     document.addEventListener('mousedown', (e) => {
       x = e.clientX; y = e.clientY; draw();
       ripple(e.clientX, e.clientY);
-      if (!window.__rollcutNoZoom) zoom(e.clientX, e.clientY);
     }, true);
 
     function ripple(cx, cy) {
@@ -60,20 +61,6 @@ function overlayScript(scale, zoomMs) {
       ).onfinish = () => r.remove();
     }
 
-    let zoomTimer = null;
-    function zoom(cx, cy) {
-      const root = document.documentElement;
-      const px = (cx / window.innerWidth) * 100;
-      const py = (cy / window.innerHeight) * 100;
-      root.style.transformOrigin = px + '% ' + py + '%';
-      root.style.transition = 'transform 220ms cubic-bezier(.22,.61,.36,1)';
-      root.style.transform = 'scale(${scale})';
-      if (zoomTimer) clearTimeout(zoomTimer);
-      zoomTimer = setTimeout(() => {
-        root.style.transition = 'transform ${zoomMs}ms cubic-bezier(.22,.61,.36,1)';
-        root.style.transform = 'none';
-      }, 220);
-    }
     return true;
   };
 
@@ -85,24 +72,13 @@ function overlayScript(scale, zoomMs) {
 }
 /** Install the overlay so it survives every navigation in the session. */
 export async function installCursor(page) {
-    const script = overlayScript(ZOOM_SCALE, ZOOM_MS);
+    const script = overlayScript();
     await page.addInitScript(script);
     // The first document may already be open; inject there too.
     await page.evaluate(script).catch(() => undefined);
 }
-/**
- * Drags move the pointer while the button is down; zooming there would shift
- * the page under the stroke, so the driver suppresses it for the duration.
- */
-export async function setZoomEnabled(page, enabled) {
-    await page
-        .evaluate((off) => {
-        window.__rollcutNoZoom = off;
-    }, !enabled)
-        .catch(() => undefined);
-}
 /** Re-assert the overlay after a navigation that raced the init script. */
 export async function ensureCursor(page) {
-    await page.evaluate(overlayScript(ZOOM_SCALE, ZOOM_MS)).catch(() => undefined);
+    await page.evaluate(overlayScript()).catch(() => undefined);
 }
 //# sourceMappingURL=cursor.js.map
