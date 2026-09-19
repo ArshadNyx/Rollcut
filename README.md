@@ -117,12 +117,108 @@ Two providers sit behind one interface (`src/tts/provider.ts`):
 
 Use `--no-narration` (or `narration: false`) to skip TTS entirely.
 
+## Planning a spec (experimental)
+
+Writing a spec by hand means hunting for selectors. `rollcut plan` proposes one
+for you from a live page:
+
+```bash
+pnpm rollcut plan https://excalidraw.com --readme README.md --out demos/app.yaml
+```
+
+It opens the page and a few pages it links to, collects the targets that have
+stable, unique selectors on each, and asks a model for a walkthrough that can
+move between them. Use `--pages` to change how many are visited (default 4). **It only proposes** — nothing is recorded
+and nothing is committed. Read the spec, edit it, then run `rollcut record` on
+it yourself.
+
+Four things keep the output honest, all enforced in code rather than asked for
+in the prompt — models tested ignored every one of these when it was only a
+written instruction:
+
+- The model may only use selectors that were actually found on the page. Any it
+  invents are dropped and reported rather than written into the spec.
+- Every step is checked against **the page it actually runs on**. Following a
+  link moves that cursor, so a selector from the previous page is dropped
+  rather than shipped. Navigate somewhere that was not observed and the
+  selector steps after it are dropped too, since nothing there was verified.
+- Coordinates (`clickAt`, `drag`) are offered only when the page has a real
+  canvas, and are rejected unless they land inside it. Without this, canvas
+  apps get a demo that selects a tool and never draws anything.
+- An undo immediately followed by a redo is removed: it looks like activity and
+  changes nothing.
+- The result is validated against the same zod schema a hand-written spec goes
+  through. The planner gets no special treatment.
+
+Even so, **read what it proposes**. The plumbing guarantees a runnable spec, not
+an interesting one — whether the walkthrough is worth watching is still a
+judgement call, and that is why a human confirms.
+
+### Planner backends
+
+Choose with `--llm` (or `ROLLCUT_LLM`); `ROLLCUT_PLAN_MODEL` overrides the model
+for whichever one you pick.
+
+| `--llm`               | Credentials                              | Default model            | JSON mode |
+| --------------------- | ---------------------------------------- | ------------------------ | --------- |
+| `anthropic` (default) | `ANTHROPIC_API_KEY`, or `ant auth login` | `claude-opus-5`          | schema    |
+| `openai`              | `OPENAI_API_KEY`                         | `gpt-5`                  | schema    |
+| `grok`                | `XAI_API_KEY`                            | `grok-4.6`               | schema    |
+| `groq`                | `GROQ_API_KEY`                           | `openai/gpt-oss-120b`    | schema    |
+| `kimi`                | `MOONSHOT_API_KEY`                       | `kimi-k2.6`              | schema    |
+| `qwen`                | `DASHSCOPE_API_KEY`                      | `qwen-plus`              | object    |
+| `openrouter`          | `OPENROUTER_API_KEY`                     | `openai/gpt-oss-120b`    | schema    |
+| `custom`              | `ROLLCUT_LLM_KEY` + `ROLLCUT_LLM_URL`    | set `ROLLCUT_PLAN_MODEL` | object    |
+
+Only `anthropic` needs a dependency (the optional `@anthropic-ai/sdk`); every
+other backend speaks the OpenAI chat-completions dialect over plain HTTPS.
+
+**JSON mode** is how the plan is constrained. `schema` means the provider
+constrains decoding to the spec schema. `object` means it only promises valid
+JSON, so the schema goes in the prompt instead — the result is validated the
+same way either way, so a loose plan is rejected rather than recorded. Only
+providers that document schema support claim it.
+
+> **`grok` and `groq` are different services.** Grok is xAI's model
+> (`XAI_API_KEY`, api.x.ai); Groq is a fast-inference provider
+> (`GROQ_API_KEY`, api.groq.com). Each backend reports only its own credential
+> in errors so a mix-up is obvious.
+
+Endpoints are overridable for region-specific or self-hosted deployments:
+`ROLLCUT_QWEN_URL` (Model Studio is region-specific), `ROLLCUT_GROQ_URL`,
+`ROLLCUT_GROK_URL`. Anything else OpenAI-compatible works via `--llm custom`:
+
+```bash
+export ROLLCUT_LLM_URL=https://my-host/v1/chat/completions
+export ROLLCUT_LLM_KEY=...
+pnpm rollcut plan https://example.com --llm custom
+```
+
+Default models are a starting point, not a promise — if a provider rejects one,
+the error says to set `ROLLCUT_PLAN_MODEL`.
+
+```bash
+export GROQ_API_KEY=gsk-...
+pnpm rollcut plan https://excalidraw.com --llm groq --out demos/app.yaml
+```
+
+Only some models support constrained decoding. The defaults above do; if you
+point `ROLLCUT_PLAN_MODEL` at one that does not, the provider may ignore
+`strict` and return loosely-shaped JSON — which the schema validation
+downstream will reject rather than pass on.
+
+Adding another OpenAI-compatible backend is one row in `PRESETS`
+(`src/plan/presets.ts`). Anything else means one file implementing
+`PlanProvider`.
+
 ## CLI
 
 ```
 rollcut record <spec.yaml> [options]
+rollcut plan <url> [options]
 
   --url <baseUrl>   Override the spec's baseUrl.
+  --readme <path>   (plan) Give the planner your README for context.
   --out <dir>       Output directory (default: out).
   --voice <name>    Provider-specific voice name.
   --tts <name>      kokoro | edge (default: kokoro).

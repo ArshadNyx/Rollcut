@@ -1,6 +1,11 @@
 node_modules/
 out/
 *.log
+
+# Never commit credentials
+.env
+.env.*
+!.env.example
 .DS_Store
 
 # Local Claude Code / tooling state

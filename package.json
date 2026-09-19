@@ -41,7 +41,8 @@
     "README.md"
   ],
   "optionalDependencies": {
-    "kokoro-js": "^1.2.1"
+    "kokoro-js": "^1.2.1",
+    "@anthropic-ai/sdk": "^0.126.0"
   },
   "repository": {
     "type": "git",

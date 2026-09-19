@@ -100,3 +100,30 @@ describe('pipeline (silent)', () => {
     ).rejects.toThrow(/#does-not-exist.*step 2/s);
   });
 });
+
+describe('observe', () => {
+  it('finds stable, unique selectors on a real page', async () => {
+    const { observe } = await import('../../src/plan/observe.js');
+    const o = await observe(`${baseUrl}index.html`);
+
+    expect(o.title).toBe('Rollcut fixture');
+    expect(o.scrollable).toBe(true);
+
+    const selectors = o.elements.map((e) => e.selector);
+    expect(selectors).toContain('#go');
+    expect(selectors).toContain('#field');
+    // Every selector it reports must actually be usable.
+    expect(new Set(selectors).size).toBe(selectors.length);
+
+    const button = o.elements.find((e) => e.selector === '#go');
+    expect(button?.role).toBe('button');
+    expect(button?.name).toBe('Show panel');
+  });
+
+  it('skips elements that are not visible', async () => {
+    const { observe } = await import('../../src/plan/observe.js');
+    const o = await observe(`${baseUrl}index.html`);
+    // #panel starts display:none and must not be offered as a target.
+    expect(o.elements.map((e) => e.selector)).not.toContain('#panel');
+  });
+});

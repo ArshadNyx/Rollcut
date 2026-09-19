@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-import { stat } from 'node:fs/promises';
+import { readFile, stat, writeFile } from 'node:fs/promises';
 import { DEFAULT_PROVIDER, PROVIDERS, runPipeline } from './pipeline.js';
+import { plan } from './plan/planner.js';
+import { DEFAULT_PLAN_PROVIDER, PLAN_PROVIDERS, loadPlanProvider } from './plan/provider.js';
 
 const USAGE = `rollcut record <spec.yaml> [options]
+rollcut plan <url> [options]
 
   --url <baseUrl>   Override the spec's baseUrl (preview deployments).
   --out <dir>       Output directory (default: out).
@@ -11,8 +14,15 @@ const USAGE = `rollcut record <spec.yaml> [options]
   --no-narration    Record silently; skip TTS and subtitles.
   --no-subtitles    Narrate, but do not burn subtitles.
 
-Example:
-  pnpm rollcut record demos/excalidraw.yaml`;
+Plan options:
+  --readme <path>   Give the planner your README for context.
+  --pages <n>       Pages to observe, landing page included (default: 4).
+  --llm <name>      Planner backend: ${PLAN_PROVIDERS.join(' | ')} (default: ${DEFAULT_PLAN_PROVIDER}).
+  --out <file>      Write the proposed spec here instead of stdout.
+
+Examples:
+  pnpm rollcut record demos/excalidraw.yaml
+  pnpm rollcut plan https://excalidraw.com --readme README.md`;
 
 interface Args {
   command: string | undefined;
@@ -21,6 +31,10 @@ interface Args {
   voice?: string;
   tts: string;
   out: string;
+  readme?: string;
+  planOut?: string;
+  llm: string;
+  pages?: number;
   narration: boolean;
   subtitles: boolean;
 }
@@ -32,6 +46,7 @@ function parseArgs(argv: string[]): Args {
     spec,
     out: 'out',
     tts: process.env.ROLLCUT_TTS || DEFAULT_PROVIDER,
+    llm: process.env.ROLLCUT_LLM || DEFAULT_PLAN_PROVIDER,
     narration: true,
     subtitles: true,
   };
@@ -48,9 +63,14 @@ function parseArgs(argv: string[]): Args {
     const value = rest[++i];
     if (!value) throw new Error(`Flag ${flag} needs a value.\n\n${USAGE}`);
     if (flag === '--url') args.url = value;
-    else if (flag === '--out') args.out = value;
-    else if (flag === '--voice') args.voice = value;
+    else if (flag === '--out') {
+      args.out = value;
+      args.planOut = value;
+    } else if (flag === '--voice') args.voice = value;
     else if (flag === '--tts') args.tts = value;
+    else if (flag === '--readme') args.readme = value;
+    else if (flag === '--llm') args.llm = value;
+    else if (flag === '--pages') args.pages = Number(value);
     else throw new Error(`Unknown flag ${flag}.\n\n${USAGE}`);
   }
   return args;
@@ -60,8 +80,48 @@ function human(bytes: number): string {
   return `${(bytes / 1_000_000).toFixed(1)} MB`;
 }
 
+/** Propose a spec from a URL. Writes a file; never records anything. */
+async function runPlan(args: Args): Promise<void> {
+  const url = args.spec;
+  if (!url) {
+    console.error(USAGE);
+    process.exit(1);
+  }
+
+  const readme = args.readme ? await readFile(args.readme, 'utf8') : undefined;
+  const result = await plan({
+    url,
+    readme,
+    provider: await loadPlanProvider(args.llm),
+    maxPages: args.pages,
+    log: (m) => console.error(m),
+  });
+
+  if (result.rejected.length > 0) {
+    console.error(
+      `\nDropped ${result.rejected.length} step(s) using selectors that are not on the page:\n` +
+        result.rejected.map((r) => `  ${r}`).join('\n'),
+    );
+  }
+
+  if (args.planOut) {
+    await writeFile(args.planOut, result.yaml, 'utf8');
+    console.error(`\nwrote ${args.planOut} — read it, edit it, then:`);
+    console.error(`  pnpm rollcut record ${args.planOut}`);
+  } else {
+    console.log(result.yaml);
+    console.error('\nReview this, save it, then run `rollcut record` on it.');
+  }
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+
+  if (args.command === 'plan') {
+    await runPlan(args);
+    return;
+  }
+
   if (args.command !== 'record' || !args.spec) {
     console.error(USAGE);
     process.exit(1);
