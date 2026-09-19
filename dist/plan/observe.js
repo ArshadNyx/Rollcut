@@ -21,6 +21,16 @@ function collectorScript(maxElements, maxHeadings) {
   var ident = function (v) { return window.CSS && window.CSS.escape ? window.CSS.escape(v) : v; };
   var generated = function (id) { return /^[a-z]*[0-9a-f]{6,}$/i.test(id) || /^(radix|headless|mui|react|:r)/i.test(id); };
 
+  // Icon fonts put private-use glyphs in textContent; they are invisible in
+  // the page and useless in a selector.
+  var clean = function (t) {
+    return (t || '')
+      .replace(/[\\uE000-\\uF8FF]/g, ' ')
+      .replace(/[\\uDB80-\\uDBFF][\\uDC00-\\uDFFF]/g, ' ')
+      .replace(/\\s+/g, ' ')
+      .trim();
+  };
+
   // Most stable first: a test id survives a redesign, an nth-child does not.
   var selectorFor = function (el) {
     var testId = el.getAttribute('data-testid') || el.getAttribute('data-test-id');
@@ -34,6 +44,20 @@ function collectorScript(maxElements, maxHeadings) {
     if (nm) return el.tagName.toLowerCase() + '[name="' + attr(nm) + '"]';
     var href = el.getAttribute('href');
     if (href && href.length < 60) return 'a[href="' + attr(href) + '"]';
+
+    var tag = el.tagName.toLowerCase();
+
+    // An input has no text of its own; its placeholder is the next best thing.
+    var ph = el.getAttribute('placeholder');
+    if (ph) return tag + '[placeholder="' + attr(ph) + '"]';
+    var type = el.getAttribute('type');
+    if (type && tag === 'input') return 'input[type="' + attr(type) + '"]';
+
+    // Last resort: match on visible text. Component libraries that emit only
+    // class names — Tamagui, many React Native Web apps — leave nothing else,
+    // and without this those pages yield no targets at all.
+    var text = clean(el.textContent).slice(0, 40);
+    if (text.length >= 2) return tag + ':has-text("' + attr(text) + '")';
     return null;
   };
 
@@ -70,9 +94,23 @@ function collectorScript(maxElements, maxHeadings) {
 
     var selector = selectorFor(el);
     if (!selector || seen[selector]) continue;
+
     // Keep only selectors resolving to exactly one element, so a generated step
-    // cannot silently act on the wrong one.
-    if (document.querySelectorAll(selector).length !== 1) continue;
+    // cannot silently act on the wrong one. has-text is Playwright syntax, not
+    // CSS, so querySelectorAll cannot check it — count same-tag elements
+    // carrying the same text instead, which is what it matches on.
+    var textMatch = selector.indexOf(':has-text("') !== -1;
+    if (textMatch) {
+      var wanted = clean(el.textContent).slice(0, 40);
+      var sameTag = document.querySelectorAll(el.tagName.toLowerCase());
+      var hits = 0;
+      for (var t = 0; t < sameTag.length; t++) {
+        if (clean(sameTag[t].textContent).indexOf(wanted) !== -1) hits++;
+      }
+      if (hits !== 1) continue;
+    } else if (document.querySelectorAll(selector).length !== 1) {
+      continue;
+    }
     seen[selector] = true;
 
     var hrefAttr = el.getAttribute('href') || '';

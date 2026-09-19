@@ -20,6 +20,10 @@ const PAGE = `<!doctype html>
 <body>
   <h1>Rollcut fixture</h1>
   <button id="go">Show panel</button>
+  <!-- No id, no test id, no aria-label: component libraries like Tamagui emit
+       only class names, and without a text fallback such a page yields nothing. -->
+  <button class="c1">Verify &amp; continue</button>
+  <input class="c2" placeholder="STX-2025" />
   <input id="field" placeholder="type here" />
   <div id="panel">Panel is visible</div>
   <div id="tall"></div>
@@ -118,6 +122,28 @@ describe('observe', () => {
     const button = o.elements.find((e) => e.selector === '#go');
     expect(button?.role).toBe('button');
     expect(button?.name).toBe('Show panel');
+  });
+
+  it('falls back to text when an element has no stable attribute', async () => {
+    const { observe } = await import('../../src/plan/observe.js');
+    const o = await observe(`${baseUrl}index.html`);
+    const selectors = o.elements.map((e) => e.selector);
+
+    expect(selectors).toContain('button:has-text("Verify & continue")');
+    // A placeholder beats text for an input, which has none of its own.
+    expect(selectors).toContain('input[placeholder="STX-2025"]');
+    // An element that has a stable attribute must still use it.
+    expect(selectors).toContain('#go');
+  });
+
+  it('only offers a text selector when it matches one element', async () => {
+    const { observe } = await import('../../src/plan/observe.js');
+    const o = await observe(`${baseUrl}index.html`);
+    const texts = o.elements.filter((e) => e.selector.includes(':has-text'));
+    // Every text selector must resolve to exactly one element.
+    for (const t of texts) {
+      expect(o.elements.filter((e) => e.selector === t.selector)).toHaveLength(1);
+    }
   });
 
   it('skips elements that are not visible', async () => {

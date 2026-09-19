@@ -127,7 +127,9 @@ pnpm rollcut plan https://excalidraw.com --readme README.md --out demos/app.yaml
 ```
 
 It opens the page and a few pages it links to, collects the targets that have
-stable, unique selectors on each, and asks a model for a walkthrough that can
+unique selectors on each — preferring `data-testid`, `id`, `aria-label`,
+`title`, `name` or `href`, and falling back to matching on visible text for
+component libraries that emit nothing but class names — and asks a model for a walkthrough that can
 move between them. Use `--pages` to change how many are visited (default 4). **It only proposes** — nothing is recorded
 and nothing is committed. Read the spec, edit it, then run `rollcut record` on
 it yourself.

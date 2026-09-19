@@ -1,0 +1,34 @@
+# TeacherOS: from the marketing site through school verification to sign-in.
+# The credentials are deliberately fake — the demo stops at the sign-in form.
+baseUrl: https://www.teacherosapp.com
+viewport: { width: 1280, height: 720 }
+pauseMs: 700
+steps:
+  - navigate: /
+    note: 'This is TeacherOS, a K through 12 learning platform.'
+  - wait: 2500
+  - click: "a[href='https://app.teacherosapp.com']"
+    note: 'Opening the app.'
+
+  - waitFor: 'input'
+  - wait: 2500
+  - click: 'input'
+  - type: 'MSSS'
+    note: 'Every school has its own code.'
+  - wait: 1500
+  - click: "button:has-text('Verify')"
+    note: 'Verify the school and continue.'
+
+  - waitFor: "button:has-text('Manage classes')"
+  - wait: 1200
+  - click: "button:has-text('Manage classes')"
+    note: 'TeacherOS has a separate view for teachers, students and parents.'
+
+  - waitFor: "input[type='email']"
+  - wait: 1200
+  - click: "input[type='email']"
+  - type: 'teacher@school.edu'
+    note: 'Sign in with your school account.'
+  - click: "input[type='password']"
+  - type: 'demo-password'
+  - wait: 2000
