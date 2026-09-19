@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { chromium } from '@playwright/test';
 import type { Spec, Step } from '../spec/schema.js';
 import { stepKind } from '../spec/schema.js';
-import { ensureCursor, installCursor, setZoomEnabled, ZOOM_MS } from './cursor.js';
+import { ensureCursor, installCursor } from './cursor.js';
+import { ZOOM_TOTAL_MS, type ZoomEvent } from '../media/zoom.js';
 import * as steps from './steps.js';
 import type { Narration } from '../tts/provider.js';
 import type { Cue } from '../media/subtitles.js';
@@ -21,6 +22,8 @@ export interface RecordOptions {
 export interface RecordResult {
   /** Raw Playwright webm. */
   raw: string;
+  /** Where and when clicks landed, for the zoom applied during assembly. */
+  zooms: ZoomEvent[];
   /** Narration placements, in video time, for muxing and subtitles. */
   cues: (Cue & { wavPath: string })[];
 }
@@ -54,6 +57,7 @@ export async function record(spec: Spec, options: RecordOptions): Promise<Record
   await installCursor(page);
 
   const cues: (Cue & { wavPath: string })[] = [];
+  const zooms: ZoomEvent[] = [];
 
   try {
     let navigated = false;
@@ -64,43 +68,25 @@ export async function record(spec: Spec, options: RecordOptions): Promise<Record
       const cueStart = Date.now() - t0;
       const kind = stepKind(step);
 
-      if ('navigate' in step) {
-        await steps.navigate(page, baseUrl, step.navigate);
-        if (!navigated) {
-          // Only the first navigate gets a settle window; after that timing
-          // stays deterministic on fixed pauses.
-          await page.waitForLoadState('load').catch(() => undefined);
-          await steps.wait(1200);
+      const clickedAt = Date.now() - t0;
+      const point = await steps.executeStep(page, step, n, {
+        baseUrl,
+        // Only the first navigate gets a settle window; after that timing
+        // stays deterministic on fixed pauses.
+        settle: !navigated && 'navigate' in step,
+        onNavigated: async (p) => {
           navigated = true;
-        }
-        await ensureCursor(page);
-        steps.resetPointer();
-      } else if ('click' in step) {
-        await steps.click(page, step.click, n);
-      } else if ('clickAt' in step) {
-        await steps.clickAt(page, step.clickAt);
-      } else if ('drag' in step) {
-        await setZoomEnabled(page, false);
-        await steps.drag(page, step.drag.from, step.drag.to);
-        await setZoomEnabled(page, true);
-      } else if ('type' in step) {
-        await steps.type(page, step.type);
-      } else if ('press' in step) {
-        await steps.press(page, step.press);
-      } else if ('wait' in step) {
-        await steps.wait(step.wait);
-      } else if ('scroll' in step) {
-        await steps.scroll(page, step.scroll, n);
-      } else if ('hover' in step) {
-        await steps.hover(page, step.hover, n);
-      } else if ('waitFor' in step) {
-        await steps.waitFor(page, step.waitFor, n);
-      }
+          await ensureCursor(p);
+        },
+      });
 
-      // Clicks trigger the zoom; hold long enough for it to ease back out.
-      const zoomTail = kind === 'click' || kind === 'clickAt' ? ZOOM_MS + 240 : 0;
+      if (point) zooms.push({ atMs: clickedAt, x: point[0], y: point[1] });
+
+      // The zoom is applied afterwards, but it plays over this stretch of the
+      // recording, so the step has to stay on screen for at least that long.
+      const zoomHold = point ? ZOOM_TOTAL_MS + 120 : 0;
       const selfPaced = kind === 'wait' || kind === 'waitFor';
-      const basePause = selfPaced ? 0 : spec.pauseMs + zoomTail;
+      const basePause = selfPaced ? 0 : Math.max(spec.pauseMs, zoomHold);
 
       if (narration) {
         // The step must stay on screen at least as long as its narration.
@@ -131,5 +117,5 @@ export async function record(spec: Spec, options: RecordOptions): Promise<Record
   }
   const raw = join(options.workDir, 'raw.webm');
   await rename(join(videoDir, first), raw);
-  return { raw, cues };
+  return { raw, cues, zooms };
 }

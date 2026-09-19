@@ -18,6 +18,7 @@ Plan options:
   --readme <path>   Give the planner your README for context.
   --pages <n>       Pages to observe, landing page included (default: 4).
   --llm <name>      Planner backend: ${PLAN_PROVIDERS.join(' | ')} (default: ${DEFAULT_PLAN_PROVIDER}).
+  --no-verify       Skip replaying the proposed spec in a browser.
   --out <file>      Write the proposed spec here instead of stdout.
 
 Examples:
@@ -35,6 +36,7 @@ interface Args {
   planOut?: string;
   llm: string;
   pages?: number;
+  verify: boolean;
   narration: boolean;
   subtitles: boolean;
 }
@@ -47,6 +49,7 @@ function parseArgs(argv: string[]): Args {
     out: 'out',
     tts: process.env.ROLLCUT_TTS || DEFAULT_PROVIDER,
     llm: process.env.ROLLCUT_LLM || DEFAULT_PLAN_PROVIDER,
+    verify: true,
     narration: true,
     subtitles: true,
   };
@@ -54,6 +57,10 @@ function parseArgs(argv: string[]): Args {
     const flag = rest[i]!;
     if (flag === '--no-narration') {
       args.narration = false;
+      continue;
+    }
+    if (flag === '--no-verify') {
+      args.verify = false;
       continue;
     }
     if (flag === '--no-subtitles') {
@@ -94,8 +101,16 @@ async function runPlan(args: Args): Promise<void> {
     readme,
     provider: await loadPlanProvider(args.llm),
     maxPages: args.pages,
+    verify: args.verify,
     log: (m) => console.error(m),
   });
+
+  if (result.failures.length > 0) {
+    console.error(
+      `\nDropped ${result.failures.length} step(s) that failed when run:\n` +
+        result.failures.map((f) => `  step ${f.step} (${f.kind}): ${f.reason}`).join('\n'),
+    );
+  }
 
   if (result.rejected.length > 0) {
     console.error(

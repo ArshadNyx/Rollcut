@@ -7,6 +7,7 @@ import {
   type SiteObservation,
 } from './observe.js';
 import type { PlanProvider } from './provider.js';
+import { verify, type StepFailure } from './verify.js';
 
 /** What we ask the model for: a flat, discriminated shape it can get right. */
 interface PlannedStep {
@@ -41,6 +42,10 @@ export interface PlanResult {
   site: SiteObservation;
   /** Steps dropped because they could not have worked, with the reason. */
   rejected: string[];
+  /** Steps that were proposed but failed when actually run. */
+  failures: StepFailure[];
+  /** Whether the spec was replayed in a browser. */
+  verified: boolean;
 }
 
 const MAX_STEPS = 14;
@@ -368,6 +373,8 @@ export interface PlanOptions {
   maxPages?: number;
   /** Skip the browser pass and reuse an observation, e.g. to re-plan. */
   site?: SiteObservation;
+  /** Replay the proposed spec and drop steps that fail. Default true. */
+  verify?: boolean;
   log?: (message: string) => void;
 }
 
@@ -420,10 +427,27 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
     );
   }
 
+  let final = parsed.data;
+  let failures: StepFailure[] = [];
+  const shouldVerify = options.verify !== false;
+
+  if (shouldVerify) {
+    log('verifying the plan in a browser…');
+    const result = await verify(final, {
+      viewport,
+      onStep: (n, kind, ok, reason) =>
+        log(`  step ${n}: ${kind} ${ok ? 'ok' : `failed — ${reason}`}`),
+    });
+    final = result.spec;
+    failures = result.failures;
+  }
+
   return {
-    spec: parsed.data,
-    yaml: yaml.dump(parsed.data, { lineWidth: 100, quotingType: '"' }),
+    spec: final,
+    yaml: yaml.dump(final, { lineWidth: 100, quotingType: '"' }),
     site,
     rejected,
+    failures,
+    verified: shouldVerify,
   };
 }

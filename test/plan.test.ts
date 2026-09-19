@@ -52,6 +52,7 @@ describe('plan', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf(observation),
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/', note: 'This is Example App.' },
         { kind: 'waitFor', selector: '[data-testid="new"]' },
@@ -80,6 +81,7 @@ describe('plan', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf(observation),
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/' },
         { kind: 'click', selector: '#invented-by-the-model' },
@@ -100,6 +102,7 @@ describe('plan', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf(observation),
+      verify: false,
       provider: stub([
         { kind: 'waitFor', selector: '#search' },
         { kind: 'click', selector: '#search' },
@@ -113,6 +116,7 @@ describe('plan', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf(observation),
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/', note: 'Here it is.' },
         { kind: 'waitFor', selector: 'a[href="/docs"]' },
@@ -132,6 +136,7 @@ describe('plan', () => {
       plan({
         url: observation.url,
         site: siteOf({ ...observation, elements: [] }),
+        verify: false,
         provider: stub([]),
       }),
     ).rejects.toThrow(/No stable selectors/);
@@ -142,6 +147,7 @@ describe('plan', () => {
       plan({
         url: observation.url,
         site: siteOf(observation),
+        verify: false,
         provider: { name: 'stub', propose: async () => ({ nonsense: true }) },
       }),
     ).rejects.toThrow(/no steps/);
@@ -263,6 +269,7 @@ describe('plan schema under strict decoding', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf(observation),
+      verify: false,
       provider: stub([
         {
           kind: 'navigate',
@@ -308,6 +315,7 @@ describe('no-op pruning', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf(withHistory),
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/' },
         { kind: 'click', selector: '[data-testid="new"]' },
@@ -339,6 +347,7 @@ describe('no-op pruning', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf(withUndo),
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/' },
         { kind: 'click', selector: '[data-testid="button-undo"]', note: 'Undo that.' },
@@ -359,6 +368,7 @@ describe('canvas steps', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf(canvasPage),
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/' },
         { kind: 'drag', from: [400, 300], to: [800, 500], note: 'Draw a shape.' },
@@ -377,6 +387,7 @@ describe('canvas steps', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf({ ...canvasPage, canvas: { x: 0, y: 0, width: 400, height: 400 } }),
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/' },
         { kind: 'clickAt', at: [900, 900] },
@@ -390,6 +401,7 @@ describe('canvas steps', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf(observation),
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/' },
         { kind: 'drag', from: [100, 100], to: [200, 200] },
@@ -408,6 +420,7 @@ describe('single-page enforcement', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf(observation),
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/' },
         { kind: 'click', selector: 'a[href="/docs"]', note: 'Open the docs.' },
@@ -424,6 +437,7 @@ describe('single-page enforcement', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf(observation),
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/' },
         { kind: 'click', selector: '[data-testid="new"]' },
@@ -438,6 +452,7 @@ describe('single-page enforcement', () => {
     const result = await plan({
       url: observation.url,
       site: siteOf(observation),
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/' },
         { kind: 'navigate', text: '/other' },
@@ -472,6 +487,7 @@ describe('multi-page plans', () => {
     const result = await plan({
       url: observation.url,
       site,
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/app', note: 'Here is the app.' },
         { kind: 'click', selector: 'a[href="/docs"]', note: 'Open the docs.' },
@@ -489,6 +505,7 @@ describe('multi-page plans', () => {
     const result = await plan({
       url: observation.url,
       site,
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/app' },
         { kind: 'click', selector: 'a[href="/docs"]' },
@@ -504,6 +521,7 @@ describe('multi-page plans', () => {
     const result = await plan({
       url: observation.url,
       site,
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/app' },
         { kind: 'navigate', text: '/docs', note: 'Over to the docs.' },
@@ -518,6 +536,7 @@ describe('multi-page plans', () => {
     const result = await plan({
       url: observation.url,
       site,
+      verify: false,
       provider: stub([
         { kind: 'navigate', text: '/app' },
         { kind: 'navigate', text: '/nowhere' },
