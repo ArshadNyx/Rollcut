@@ -86,18 +86,12 @@ Any step may carry a `note`. Notes become narration and subtitles; steps without
 
 Outputs: `mp4`, `gif`, `duration-seconds`, `asset-urls`.
 
-With `update-readme: true`, Rollcut maintains a block in your README between
-`<!-- rollcut:start -->
-
-![Demo](https://img.shields.io/badge/demo-18.6s-8b5cf6)
-
-[![Demo](https://github.com/ArshadNyx/Rollcut/releases/download/v0.2.0-test/demo.gif)](https://github.com/ArshadNyx/Rollcut/releases/download/v0.2.0-test/demo.mp4)
-
-*Recorded automatically by [Rollcut](https://rollcut.dev) for `v0.2.0-test`.*
-
-<!-- rollcut:end -->` markers. If the markers are
-absent it inserts the block under your first heading; on later releases it
-replaces the block in place rather than stacking duplicates.
+With `update-readme: true`, Rollcut maintains a block in your README delimited
+by `rollcut:start` and `rollcut:end` HTML comments. If those markers are absent
+it inserts the block under your first heading; on later releases it replaces the
+block in place rather than stacking duplicates. Markers are only recognised when
+they sit alone on a line, so prose that mentions them (like this paragraph) is
+left alone.
 
 ## Narration
 

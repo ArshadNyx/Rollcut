@@ -20,16 +20,22 @@ export function renderBlock(block) {
 /**
  * Insert or replace the Rollcut block. Idempotent: running twice produces the
  * same file, so a re-run never stacks duplicate embeds.
+ *
+ * Markers only count when they occupy a whole line. Prose that mentions them
+ * inline — documentation about this very feature, for instance — must not be
+ * mistaken for the block and overwritten.
  */
 export function applyBlock(readme, rendered) {
-    const start = readme.indexOf(START);
-    const end = readme.indexOf(END);
+    const lines = readme.split('\n');
+    const isMarker = (line, marker) => line.trim() === marker;
+    const start = lines.findIndex((l) => isMarker(l, START));
+    const end = lines.findIndex((l) => isMarker(l, END));
     if (start !== -1 && end !== -1 && end > start) {
-        return readme.slice(0, start) + rendered + readme.slice(end + END.length);
+        const replaced = [...lines.slice(0, start), ...rendered.split('\n'), ...lines.slice(end + 1)];
+        return replaced.join('\n');
     }
     // No markers yet: place it directly under the first heading, which is where
     // a reader looks first. Failing that, at the top.
-    const lines = readme.split('\n');
     const heading = lines.findIndex((l) => l.startsWith('# '));
     if (heading === -1)
         return `${rendered}\n\n${readme}`;

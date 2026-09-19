@@ -45,3 +45,42 @@ describe('applyBlock', () => {
     expect(out).toContain('just prose');
   });
 });
+
+describe('applyBlock — markers in prose', () => {
+  // Regression: a real release mangled Rollcut's own README, because the docs
+  // mention the markers inline and indexOf matched them inside backticks.
+  const documenting = [
+    '# Project',
+    '',
+    'Intro prose.',
+    '',
+    'Rollcut maintains a block between',
+    '`<!-- rollcut:start -->` and `<!-- rollcut:end -->` markers. If absent it',
+    'inserts under the first heading.',
+    '',
+  ].join('\n');
+
+  it('does not treat inline mentions as the block', () => {
+    const out = applyBlock(documenting, renderBlock(block));
+    expect(out).toContain(
+      '`<!-- rollcut:start -->` and `<!-- rollcut:end -->` markers. If absent it',
+    );
+    expect(out).toContain('inserts under the first heading.');
+    expect(out).toContain('Intro prose.');
+  });
+
+  it('inserts a real block under the heading despite the inline mentions', () => {
+    const out = applyBlock(documenting, renderBlock(block));
+    const lines = out.split('\n');
+    expect(lines.filter((l) => l.trim() === '<!-- rollcut:start -->')).toHaveLength(1);
+    expect(out.indexOf('rollcut:start -->\n')).toBeLessThan(out.indexOf('Intro prose.'));
+  });
+
+  it('replaces only the real block on a second run', () => {
+    const once = applyBlock(documenting, renderBlock(block));
+    const twice = applyBlock(once, renderBlock({ ...block, tag: 'v9.9.9', durationSeconds: 5 }));
+    expect(twice.split('\n').filter((l) => l.trim() === '<!-- rollcut:start -->')).toHaveLength(1);
+    expect(twice).toContain('`v9.9.9`');
+    expect(twice).toContain('inserts under the first heading.');
+  });
+});
