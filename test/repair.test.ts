@@ -140,3 +140,76 @@ describe('a selector must not match on how it is written', () => {
     );
   });
 });
+
+describe('patchSpec', () => {
+  const source = [
+    'baseUrl: https://example.com',
+    'viewport: { width: 1280, height: 720 }',
+    'steps:',
+    '  - navigate: /',
+    `  - click: "[title^='Rectangle']"`,
+    "    note: 'Pick the rectangle tool.'",
+    '  - drag: { from: [420, 260], to: [760, 470] }',
+    '  - clickAt: [590, 360]',
+    '',
+  ].join('\n');
+
+  const repair = (from: string, to: string, step = 5) => ({
+    step,
+    from,
+    to,
+    because: 'test',
+  });
+
+  it('changes only the selector, leaving the rest of the file alone', async () => {
+    const { patchSpec } = await import('../src/plan/repair.js');
+    const out = patchSpec(source, [
+      repair("[title^='Rectangle']", '[data-testid="toolbar-rectangle"]'),
+    ])!;
+
+    // Everything a full rewrite would have reformatted must survive verbatim.
+    expect(out).toContain('viewport: { width: 1280, height: 720 }');
+    expect(out).toContain('  - drag: { from: [420, 260], to: [760, 470] }');
+    expect(out).toContain('  - clickAt: [590, 360]');
+    expect(out).toContain("    note: 'Pick the rectangle tool.'");
+    expect(out).toContain('[data-testid="toolbar-rectangle"]');
+    expect(out).not.toContain("[title^='Rectangle']");
+  });
+
+  it('produces exactly one changed line', async () => {
+    const { patchSpec } = await import('../src/plan/repair.js');
+    const out = patchSpec(source, [repair("[title^='Rectangle']", '#rect')])!;
+    const before = source.split('\n');
+    const after = out.split('\n');
+    expect(after.length).toBe(before.length);
+    expect(after.filter((line, i) => line !== before[i])).toHaveLength(1);
+  });
+
+  it('quotes a selector containing double quotes without mangling it', async () => {
+    const { patchSpec } = await import('../src/plan/repair.js');
+    const { load } = await import('js-yaml');
+    const out = patchSpec(source, [
+      repair("[title^='Rectangle']", 'button:has-text("Verify & continue")'),
+    ])!;
+    const parsed = load(out) as { steps: Record<string, string>[] };
+    expect(parsed.steps[1]!.click).toBe('button:has-text("Verify & continue")');
+  });
+
+  it('replaces each occurrence when one selector broke in two steps', async () => {
+    const { patchSpec } = await import('../src/plan/repair.js');
+    const twice = ['steps:', '  - click: "#a"', '  - waitFor: "#a"', ''].join('\n');
+    const out = patchSpec(twice, [
+      { step: 2, from: '#a', to: '#b', because: 't' },
+      { step: 3, from: '#a', to: '#c', because: 't' },
+    ])!;
+    expect(out).toContain("- click: '#b'");
+    expect(out).toContain("- waitFor: '#c'");
+  });
+
+  it('gives up rather than guessing when the selector is not found verbatim', async () => {
+    const { patchSpec } = await import('../src/plan/repair.js');
+    // The caller falls back to a full rewrite instead of writing something it
+    // did not fully understand.
+    expect(patchSpec(source, [repair('#not-in-the-file', '#x')])).toBeUndefined();
+  });
+});

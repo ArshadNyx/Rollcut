@@ -8,6 +8,15 @@ import { repair } from '../../src/plan/repair.js';
 
 /** The page as it is *now* — the spec was written against older wording. */
 const PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Repair fixture</title>
+<script>
+  // Appears late, the way a slow response or an animation does.
+  setTimeout(function () {
+    var b = document.createElement('button');
+    b.className = 'late';
+    b.textContent = 'Arrives late';
+    document.body.appendChild(b);
+  }, 1200);
+</script>
 <style>body{font:16px system-ui;margin:0;padding:40px}
 button{display:block;margin:10px 0;padding:12px 18px;font-size:16px}</style></head>
 <body>
@@ -80,6 +89,36 @@ describe('repair', () => {
     expect(result.repairs).toEqual([]);
     expect(result.unrepaired).toHaveLength(1);
     expect(result.unrepaired[0]).toMatchObject({ step: 2 });
+  });
+
+  it('retries once before calling a step broken', async () => {
+    // The button is not there when the step first runs. A drift check that
+    // reported this would cry wolf, and an ignored check is worse than none.
+    const result = await repair(
+      spec([{ navigate: 'index.html' }, { click: 'button:has-text("Arrives late")' }]),
+    );
+    expect(result.healthy).toBe(true);
+    expect(result.unrepaired).toEqual([]);
+  });
+
+  it('keeps a step it could not mend rather than deleting it', async () => {
+    // Dropping the step would silently shorten the demo and hide the problem
+    // behind a spec that suddenly "passes".
+    const result = await repair(
+      spec([
+        { navigate: 'index.html' },
+        { click: 'button:has-text("Publish release")', note: 'Ship it.' },
+        { click: 'button:has-text("Verify and continue")' },
+      ]),
+    );
+
+    expect(result.unrepaired).toHaveLength(1);
+    expect(result.spec.steps).toHaveLength(3);
+    // Untouched, note and all, for the author to decide about.
+    expect(result.spec.steps[1]).toEqual({
+      click: 'button:has-text("Publish release")',
+      note: 'Ship it.',
+    });
   });
 
   it('carries on through the rest of the spec after a repair', async () => {

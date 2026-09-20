@@ -182,7 +182,8 @@ async function runRepair(args) {
         process.exit(1);
     }
     const { loadSpec } = await import('./spec/load.js');
-    const { repair } = await import('./plan/repair.js');
+    const { patchSpec, repair } = await import('./plan/repair.js');
+    const { specSchema } = await import('./spec/schema.js');
     const yaml = (await import('js-yaml')).default;
     const spec = await loadSpec(resolve(specPath));
     console.error(`checking ${specPath} against ${args.url ?? spec.baseUrl}…`);
@@ -213,7 +214,21 @@ async function runRepair(args) {
         process.exit(1);
     }
     const target = args.planOut ?? specPath;
-    await writeFile(target, yaml.dump(result.spec, { lineWidth: 100, quotingType: '"' }), 'utf8');
+    // Patch the original text so the diff shows the selectors that changed and
+    // nothing else. Fall back to a full rewrite only if the patch cannot be
+    // verified to produce the same spec.
+    const original = await readFile(resolve(specPath), 'utf8');
+    const patched = patchSpec(original, result.repairs);
+    const patchedIsSound = patched !== undefined &&
+        JSON.stringify(specSchema.safeParse(yaml.load(patched))) ===
+            JSON.stringify(specSchema.safeParse(result.spec));
+    if (patchedIsSound && patched) {
+        await writeFile(target, patched, 'utf8');
+    }
+    else {
+        console.error('\n(could not patch the file in place; rewriting it instead)');
+        await writeFile(target, yaml.dump(result.spec, { lineWidth: 100, quotingType: '"' }), 'utf8');
+    }
     console.error(`\nwrote ${target} — read the diff before committing it.`);
 }
 async function main() {

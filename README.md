@@ -143,8 +143,14 @@ word overlap could not place:
 pnpm rollcut repair demos/app.yaml --smart
 ```
 
-Either way, if nothing on the page plausibly matches, the step is reported
-unrepaired. Offering a Delete button in place of a missing Save one would be
+A repair changes the selector and nothing else — the file is patched in place,
+so a one-line fix arrives as a one-line diff. Reading that diff is the one
+thing you must do before accepting a repair, so it stays small.
+
+Either way, if nothing on the page plausibly matches, the step is **left
+exactly as it was** and reported unrepaired. Repair never deletes a step:
+shortening your demo on your behalf would hide the problem behind a spec that
+suddenly passes. Offering a Delete button in place of a missing Save one would be
 worse than failing, and a replacement is always tried on the page before it is
 written down.
 

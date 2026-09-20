@@ -127,6 +127,30 @@ export function rank(
     .map((entry) => entry.candidate);
 }
 
+/**
+ * Try a step again before concluding it is broken.
+ *
+ * A live site fails a step occasionally for reasons that have nothing to do
+ * with the spec — a slow response, an animation still settling. A drift check
+ * that reports those gets ignored, and an ignored check is worse than none.
+ */
+async function runWithRetry(
+  step: Step,
+  run: (step: Step) => Promise<unknown>,
+  pauseMs: number,
+): Promise<void> {
+  try {
+    await run(step);
+    return;
+  } catch (first) {
+    // Only worth retrying something that could plausibly settle; a selector
+    // that is genuinely gone will not appear because we waited.
+    if (!selectorOf(step)) throw first;
+    await wait(Math.max(500, pauseMs));
+    await run(step);
+  }
+}
+
 function selectorOf(step: Step): string | undefined {
   if ('click' in step) return step.click;
   if ('hover' in step) return step.hover;
@@ -189,7 +213,7 @@ export async function repair(spec: Spec, options: RepairOptions = {}): Promise<R
         executeStep(page, step, n, { baseUrl, settle: 'navigate' in step });
 
       try {
-        await run(original);
+        await runWithRetry(original, run, spec.pauseMs);
         steps.push(original);
         // Replay at the pace the recorder uses. Run back-to-back, an app gets
         // no time to settle and steps fail that are not actually broken —
@@ -199,6 +223,9 @@ export async function repair(spec: Spec, options: RepairOptions = {}): Promise<R
       } catch (e) {
         const broken = selectorOf(original);
         if (!broken) {
+          // Kept, not dropped: removing a step silently shortens the demo, and
+          // a step that failed once may be fine on the next run.
+          steps.push(original);
           unrepaired.push({ step: n, selector: '', reason: (e as Error).message.split('\n')[0]! });
           continue;
         }
@@ -228,6 +255,9 @@ export async function repair(spec: Spec, options: RepairOptions = {}): Promise<R
         }
 
         if (!mended) {
+          // Left exactly as it was. Repair reports what it could not mend; it
+          // does not decide on the author's behalf that a step should go.
+          steps.push(original);
           unrepaired.push({
             step: n,
             selector: broken,
@@ -258,4 +288,47 @@ export async function repair(spec: Spec, options: RepairOptions = {}): Promise<R
     unrepaired,
     healthy: repairs.length === 0 && unrepaired.length === 0,
   };
+}
+
+/** Quote a selector the way YAML needs, preferring the less noisy form. */
+function yamlQuote(value: string): string {
+  if (!value.includes("'")) return `'${value}'`;
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+/**
+ * Apply repairs to the original YAML text rather than re-serialising the spec.
+ *
+ * Dumping the parsed spec rewrites the whole file — flow style expands, quoting
+ * changes, `clickAt: [590, 360]` becomes a three-line list — so a one-line fix
+ * arrives as a hundred-line diff. Reading that diff is the one thing a person
+ * must do before accepting a repair, so it has to stay small.
+ *
+ * Returns undefined when a selector cannot be found verbatim, so the caller can
+ * fall back rather than write something it did not fully understand.
+ */
+export function patchSpec(source: string, repairs: Repair[]): string | undefined {
+  let out = source;
+  let from = 0;
+
+  for (const repair of [...repairs].sort((a, b) => a.step - b.step)) {
+    const at = out.indexOf(repair.from, from);
+    if (at === -1) return undefined;
+
+    let start = at;
+    let end = at + repair.from.length;
+    // Swallow the surrounding quotes so the replacement can choose its own.
+    const before = out[start - 1];
+    const after = out[end];
+    if ((before === '"' && after === '"') || (before === "'" && after === "'")) {
+      start -= 1;
+      end += 1;
+    }
+
+    const replacement = yamlQuote(repair.to);
+    out = out.slice(0, start) + replacement + out.slice(end);
+    // Continue past this one: the same selector may be broken in two steps.
+    from = start + replacement.length;
+  }
+  return out;
 }
