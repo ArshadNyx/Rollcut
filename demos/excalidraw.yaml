@@ -5,7 +5,7 @@ steps:
   - navigate: /
     note: 'This is Excalidraw, a whiteboard that runs in the browser.'
   - wait: 1500
-  - click: "[title^='Nope']"
+  - click: "[title^='Rectangle']"
     note: 'Pick the rectangle tool.'
   - drag: { from: [420, 260], to: [760, 470] }
     note: 'Draw a shape on the canvas.'
