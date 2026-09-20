@@ -12,7 +12,9 @@ export function renderBlock(block) {
         '',
         `[![Demo](${block.gifUrl})](${block.mp4Url})`,
         '',
-        `*Recorded automatically by [Rollcut](https://rollcut.dev) for \`${block.tag}\`.*`,
+        // Underscores, not asterisks: Prettier's default emphasis style, so the
+        // block does not fail a format check in the repo it is committed to.
+        `_Recorded automatically by [Rollcut](https://rollcut.dev) for \`${block.tag}\`._`,
         '',
         END,
     ].join('\n');

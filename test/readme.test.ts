@@ -9,6 +9,14 @@ const block = {
 };
 
 describe('renderBlock', () => {
+  it('uses the emphasis style Prettier expects', () => {
+    // An asterisk-italic block fails `prettier --check` in whatever repo it
+    // lands in — including this one, where it broke CI.
+    const md = renderBlock(block);
+    expect(md).toContain('_Recorded automatically');
+    expect(md).not.toContain('*Recorded automatically');
+  });
+
   it('embeds the gif linking to the mp4, with the tag and duration', () => {
     const md = renderBlock(block);
     expect(md).toContain('[![Demo](https://example.com/demo.gif)](https://example.com/demo.mp4)');

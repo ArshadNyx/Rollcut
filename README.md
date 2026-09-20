@@ -10,7 +10,7 @@ Rollcut is a GitHub Action that turns every release into a narrated demo video. 
 
 [![Demo](https://github.com/ArshadNyx/Rollcut/releases/download/v1.1.0/demo.gif)](https://github.com/ArshadNyx/Rollcut/releases/download/v1.1.0/demo.mp4)
 
-*Recorded automatically by [Rollcut](https://rollcut.dev) for `v1.1.0`.*
+_Recorded automatically by [Rollcut](https://rollcut.dev) for `v1.1.0`._
 
 <!-- rollcut:end -->
 
