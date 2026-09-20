@@ -7,6 +7,18 @@ branding:
   color: purple
 
 inputs:
+  mode:
+    description: >-
+      record (default) makes the video and attaches it to the release. check
+      replays the spec against the live site and reports any step that no longer
+      works, without recording — run it on a schedule to learn the day your app
+      changes rather than the day you cut a release.
+    required: false
+    default: 'record'
+  fail-on-drift:
+    description: 'Fail the job when mode is check and a step no longer works.'
+    required: false
+    default: 'true'
   spec:
     description: Path to the Rollcut YAML spec.
     required: true
@@ -50,6 +62,9 @@ inputs:
     default: ${{ github.token }}
 
 outputs:
+  drifted:
+    description: 'true when a check run found a step that no longer works.'
+    value: ${{ steps.check.outputs.drifted }}
   mp4:
     description: Path to the generated MP4.
     value: ${{ steps.record.outputs.mp4 }}
@@ -108,8 +123,32 @@ runs:
       working-directory: ${{ github.action_path }}
       run: pnpm exec playwright install --with-deps chromium
 
+    - name: Check the spec against the live site
+      id: check
+      if: inputs.mode == 'check'
+      shell: bash
+      run: |
+        if node "${{ github.action_path }}/dist/cli.js" repair "${{ inputs.spec }}" --check 2>&1 | tee drift.log; then
+          echo "drifted=false" >> "$GITHUB_OUTPUT"
+          echo "### \`${{ inputs.spec }}\` still matches the site" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+        echo "drifted=true" >> "$GITHUB_OUTPUT"
+        {
+          echo "### \`${{ inputs.spec }}\` no longer matches the site"
+          echo
+          echo '```'
+          cat drift.log
+          echo '```'
+          echo
+          echo "Run \`rollcut repair ${{ inputs.spec }}\` to apply the fixes."
+        } >> "$GITHUB_STEP_SUMMARY"
+        # Reported either way; failing is what makes it visible.
+        [ "${{ inputs.fail-on-drift }}" = "true" ] && exit 1 || exit 0
+
     - name: Record demo
       id: record
+      if: inputs.mode != 'check'
       shell: bash
       run: node "${{ github.action_path }}/dist/action.js"
       env:

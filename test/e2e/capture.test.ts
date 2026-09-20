@@ -15,6 +15,9 @@ button{padding:12px 18px;font-size:16px}input{padding:10px;font-size:16px;displa
   <button class="only-a-class">Verify &amp; continue</button>
   <input id="code" placeholder="STX-2025" />
   <input id="email" type="email" />
+  <!-- A third-party widget: the recorder is installed in every frame, and a
+       bar mounted inside one appears clipped over the widget itself. -->
+  <iframe id="widget" srcdoc="<button>Continue with Google</button>" width="300" height="60"></iframe>
 </body></html>`;
 
 let dir: string;
@@ -90,6 +93,91 @@ describe('capture recorder', () => {
     await page.waitForTimeout(200);
     // Rollcut's own UI must not end up in the user's spec.
     expect(recorded.length).toBe(before);
+  });
+
+  it('survives a single-page app re-rendering the body', async () => {
+    // A framework owning body's children will wipe anything attached there.
+    await page.evaluate(() => {
+      document.body.innerHTML = '<p>re-rendered</p>';
+    });
+    await page.waitForTimeout(300);
+    expect(await page.locator('#__rollcut-capture-bar').count()).toBe(1);
+  });
+
+  it('never leaves two recording bars on the page', async () => {
+    // A stray second bar overlaps the page and can intercept a click the
+    // person is trying to record.
+    await page.evaluate(() => {
+      const stray = document.createElement('div');
+      stray.id = '__rollcut-capture-bar';
+      document.body.appendChild(stray);
+    });
+    await page.waitForTimeout(300);
+    expect(await page.locator('#__rollcut-capture-bar').count()).toBe(1);
+  });
+
+  it('still works when injected before the document exists', async () => {
+    // The real path is addInitScript, which runs before documentElement. The
+    // earlier tests injected after load and so never exercised it: an init
+    // error there aborts the script and every listener with it, leaving a bar
+    // that displays but records nothing.
+    const early = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const seen: Record<string, unknown>[] = [];
+    let ended = false;
+    await early.exposeBinding('__rollcutRecord', (_s, a: Record<string, unknown>) => {
+      seen.push(a);
+    });
+    await early.exposeBinding('__rollcutFinish', () => {
+      ended = true;
+    });
+
+    const fresh = await early.newPage();
+    const errors: string[] = [];
+    fresh.on('pageerror', (e) => errors.push(e.message));
+    await fresh.addInitScript(recorderScript());
+    await fresh.goto(`${pathToFileURL(dir).href}/index.html`, { waitUntil: 'load' });
+    await fresh.waitForTimeout(500);
+
+    expect(errors).toEqual([]);
+    expect(await fresh.locator('#__rollcut-capture-bar').count()).toBe(1);
+
+    await fresh.locator('button.only-a-class').click();
+    expect(seen.some((r) => r.kind === 'click')).toBe(true);
+
+    await fresh.evaluate(() => {
+      document.querySelector<HTMLButtonElement>('#__rollcut-capture-bar button')?.click();
+    });
+    await fresh.waitForTimeout(200);
+    expect(ended).toBe(true);
+
+    await early.close();
+  });
+
+  it('does not mount a bar inside a third-party iframe', async () => {
+    // Its own page: an earlier test wipes document.body, which would take the
+    // iframe with it.
+    const own = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    await own.exposeBinding('__rollcutRecord', () => {});
+    await own.exposeBinding('__rollcutFinish', () => {});
+    const framed = await own.newPage();
+    await framed.addInitScript(recorderScript());
+    await framed.goto(`${pathToFileURL(dir).href}/index.html`, { waitUntil: 'load' });
+    await framed.waitForTimeout(600);
+
+    const frames = framed.frames();
+    expect(frames.length).toBeGreaterThan(1);
+
+    const inFrames = await Promise.all(
+      frames
+        .filter((f) => f !== framed.mainFrame())
+        .map((f) => f.locator('#__rollcut-capture-bar').count()),
+    );
+    // A bar in a widget's frame is clipped to the widget and cannot be tidied
+    // away by the top frame.
+    expect(inFrames.every((n) => n === 0)).toBe(true);
+    expect(await framed.mainFrame().locator('#__rollcut-capture-bar').count()).toBe(1);
+
+    await own.close();
   });
 
   it('finishes when the Finish button is pressed', async () => {

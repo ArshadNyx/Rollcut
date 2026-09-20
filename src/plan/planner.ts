@@ -48,7 +48,8 @@ export interface PlanResult {
   verified: boolean;
 }
 
-const MAX_STEPS = 14;
+/** Longer demos are allowed; this is the default, not a ceiling. */
+export const DEFAULT_MAX_STEPS = 14;
 
 /**
  * The spec format is a union of single-key objects, which models get wrong in
@@ -129,7 +130,7 @@ export const PLAN_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
   required: ['steps'],
   properties: {
-    steps: { type: 'array', minItems: 3, maxItems: MAX_STEPS, items: STEP_SCHEMA },
+    steps: { type: 'array', minItems: 3, maxItems: DEFAULT_MAX_STEPS, items: STEP_SCHEMA },
   },
 };
 
@@ -159,7 +160,7 @@ Make it worth watching:
 - Roughly half the steps should carry a note; silent steps are fine.
 - Write notes as spoken sentences: plain and declarative. Say what is happening
   and why it matters, not what the button is called. No marketing language.
-- Keep it under ${MAX_STEPS} steps.`;
+- Keep it under ${DEFAULT_MAX_STEPS} steps.`;
 
 /** Extra rules that only make sense when the page is a canvas app. */
 function canvasRules(canvas: NonNullable<PageObservation['canvas']>): string {
@@ -220,7 +221,39 @@ function toSpec(
   site: SiteObservation,
   viewport: { width: number; height: number },
 ): { spec: unknown; rejected: string[] } {
-  const byPath = new Map(site.pages.map((page) => [page.path, page]));
+  // Keyed by origin and path: a site can span subdomains, and "/" on the
+  // marketing site is not "/" on the app.
+  const key = (page: PageObservation) => `${new URL(page.url).origin}${page.path}`;
+  const byPath = new Map<string, PageObservation>();
+  for (const page of site.pages) {
+    byPath.set(key(page), page);
+    // Also reachable by the address that led here, before any redirect.
+    if (page.requested) {
+      try {
+        const asked = new URL(page.requested);
+        byPath.set(`${asked.origin}${normalisePath(asked.pathname)}`, page);
+      } catch {
+        // An unparseable request is simply not an extra way in.
+      }
+    }
+  }
+  const landingOrigin = new URL(site.pages[0]!.url).origin;
+
+  /** How a step should refer to a page: relative at home, absolute elsewhere. */
+  const target = (page: PageObservation): string =>
+    new URL(page.url).origin === landingOrigin ? page.path : page.url;
+
+  const find = (path: string): PageObservation | undefined => {
+    const direct = byPath.get(`${landingOrigin}${normalisePath(path)}`);
+    if (direct) return direct;
+    // An absolute path already names its origin.
+    try {
+      const url = new URL(path);
+      return byPath.get(`${url.origin}${normalisePath(url.pathname)}`);
+    } catch {
+      return site.pages.find((page) => page.path === normalisePath(path));
+    }
+  };
   const rejected: string[] = [];
   const out: Record<string, unknown>[] = [];
 
@@ -232,7 +265,8 @@ function toSpec(
     const href = /^a\[href="(.*)"\]$/.exec(selector)?.[1];
     if (!href) return undefined;
     try {
-      return byPath.get(normalisePath(new URL(href, site.origin).pathname));
+      const url = new URL(href, site.origin);
+      return byPath.get(`${url.origin}${normalisePath(url.pathname)}`);
     } catch {
       return undefined;
     }
@@ -278,13 +312,12 @@ function toSpec(
 
     switch (step.kind) {
       case 'navigate': {
-        let path = normalisePath(step.text || '/');
         // Models reach for "/" out of habit. When that is not where the demo
         // starts, treat the opening navigate as meaning the landing page
         // rather than silently invalidating every step after it.
-        if (out.length === 0 && !byPath.has(path)) path = landing.path;
-        out.push({ navigate: path, ...note });
-        current = byPath.get(path);
+        const found = find(step.text || '/') ?? (out.length === 0 ? landing : undefined);
+        out.push({ navigate: found ? target(found) : normalisePath(step.text || '/'), ...note });
+        current = found;
         break;
       }
       case 'type':
@@ -324,11 +357,11 @@ function toSpec(
   }
 
   // A demo has to start somewhere; the model is told this but may still skip it.
-  if (!out.some((step) => 'navigate' in step)) out.unshift({ navigate: landing.path });
+  if (!out.some((step) => 'navigate' in step)) out.unshift({ navigate: target(landing) });
 
   return {
     spec: {
-      baseUrl: site.origin,
+      baseUrl: landingOrigin,
       viewport,
       pauseMs: 700,
       steps: dropNoOpPairs(out),
@@ -406,7 +439,7 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
     system: landing.canvas ? SYSTEM + canvasRules(landing.canvas) : SYSTEM,
     user: describe(site, options.readme),
     schema: PLAN_SCHEMA,
-    maxSteps: MAX_STEPS,
+    maxSteps: DEFAULT_MAX_STEPS,
   });
 
   const steps = (proposed as { steps?: PlannedStep[] }).steps;

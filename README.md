@@ -117,6 +117,64 @@ Two providers sit behind one interface (`src/tts/provider.ts`):
 
 Use `--no-narration` (or `narration: false`) to skip TTS entirely.
 
+## Keeping a spec working
+
+Specs rot. You rename a button, and a release video breaks weeks later without
+anyone noticing.
+
+```bash
+pnpm rollcut repair demos/app.yaml --check    # report only, non-zero if broken
+pnpm rollcut repair demos/app.yaml            # mend it in place
+```
+
+Repair replays the spec against the live site. When a step fails, it reads what
+is on the page _at that point in the run_ — which no fresh visit could
+reproduce — ranks what most likely replaced the missing element, and **tries
+the replacement before writing it down**. A repair is therefore something that
+demonstrably worked, not a suggestion.
+
+Matching is deterministic by default, so the reason is always explainable: a
+rename usually keeps most of the wording. That is blind to a rename that keeps
+the _meaning_ and changes the words — "Verify & continue" to "Confirm school"
+shares no words at all — so `--smart` consults a model, but only for the steps
+word overlap could not place:
+
+```bash
+pnpm rollcut repair demos/app.yaml --smart
+```
+
+Either way, if nothing on the page plausibly matches, the step is reported
+unrepaired. Offering a Delete button in place of a missing Save one would be
+worse than failing, and a replacement is always tried on the page before it is
+written down.
+
+### In CI
+
+The Action runs the same check, so your demos are watched without anyone
+remembering to look:
+
+```yaml
+name: Drift
+on:
+  schedule: [{ cron: '23 7 * * *' }]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ArshadNyx/Rollcut@v1
+        with:
+          mode: check
+          spec: demos/app.yaml
+```
+
+It writes a job summary naming the selector that moved and the command that
+fixes it, and fails the job so you notice. Set `fail-on-drift: false` to report
+without failing, or read the `drifted` output to decide for yourself.
+
+Recording needs a release; checking does not, which is the point — you find out
+the day your app changes rather than the day you cut a release.
+
 ## Capturing a spec from a real run
 
 The surest way to get a spec is to perform the demo once:
@@ -267,6 +325,30 @@ resolve against the transformed element, so a sticky header detaches from the
 viewport and — on a scrolled page — disappears entirely for the length of the
 zoom. Cropping the capture afterwards cannot disturb a layout that has already
 been recorded, and it is what screen recorders do anyway.
+
+## Assumptions, and where they are not made
+
+Rollcut has to work on sites it has never seen, so the things that vary between
+sites are either measured or configurable rather than fixed:
+
+- **How long a page takes to render** is measured, not assumed. The observer
+  polls until the page stops producing new targets, so a static page is not
+  delayed and a heavy single-page app is not cut short.
+- **A product can span subdomains.** A marketing site on `www` linking to an
+  app on a subdomain is one product, and the crawler follows it. Pages are
+  keyed by origin _and_ path, because `/` on the marketing site is not `/` on
+  the app, and a step referring to another subdomain uses an absolute URL.
+- **A control repeated in a header, hero and footer** — the usual shape for the
+  most important link on a page — is still usable: a step acts on the first
+  match, so that is what is recorded.
+- **Sign-in pages are not skipped.** For many products the sign-in flow is the
+  demo. Only paths that end a session or cost money are avoided by default, and
+  that list is overridable.
+- **Match confidence, page budget, targets per page and candidate count** are
+  all options with defaults rather than constants.
+
+What _is_ fixed is the output format — zoom timing, subtitle metrics, audio
+rate — where consistency is the point.
 
 ## How this repo tests itself
 

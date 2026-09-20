@@ -1,6 +1,6 @@
 import { chromium } from '@playwright/test';
 import { specSchema, stepKind, type Spec, type Step } from '../spec/schema.js';
-import { executeStep, resetPointer } from '../record/steps.js';
+import { executeStep, resetPointer, wait } from '../record/steps.js';
 
 export interface StepFailure {
   /** 1-based, against the spec as proposed. */
@@ -62,6 +62,9 @@ export async function verify(spec: Spec, options: VerifyOptions = {}): Promise<V
           settle: 'navigate' in step,
         });
         kept.push(step);
+        // Same pacing as the recorder: replaying flat out fails steps that
+        // work perfectly well when the video is actually made.
+        await wait(spec.pauseMs);
         options.onStep?.(n, kind, true);
       } catch (e) {
         const reason = (e as Error).message.split('\n')[0] ?? 'failed';

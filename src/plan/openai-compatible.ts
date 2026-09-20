@@ -87,6 +87,16 @@ export async function chatCompletion(
         `${config.label} rejected the API key (HTTP ${response.status}). ${config.keyHint}`,
       );
     }
+    // Checked before the model branch: a rate-limit body mentions the model
+    // too, and telling someone to change models when they need to wait sends
+    // them to fix the wrong thing.
+    if (response.status === 429 || /rate.?limit|too many requests|quota/i.test(body)) {
+      const retry = response.headers.get('retry-after');
+      throw new Error(
+        `${config.label} is rate limiting this key${retry ? ` — retry in ${retry}s` : ''}. ` +
+          'Wait and run it again, or set ROLLCUT_PLAN_MODEL to a model with more headroom.',
+      );
+    }
     if (/model/i.test(body)) {
       throw new Error(
         `${config.label} rejected the model \`${config.model}\` (HTTP ${response.status}). ` +

@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { readFile, stat, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { DEFAULT_PROVIDER, PROVIDERS, runPipeline } from './pipeline.js';
 import { plan } from './plan/planner.js';
 import { DEFAULT_PLAN_PROVIDER, PLAN_PROVIDERS, loadPlanProvider } from './plan/provider.js';
 const USAGE = `rollcut record <spec.yaml> [options]
 rollcut plan <url> [options]
 rollcut capture <url> [options]
+rollcut repair <spec.yaml> [options]
 
   --url <baseUrl>   Override the spec's baseUrl (preview deployments).
   --out <dir>       Output directory (default: out).
@@ -19,6 +21,12 @@ Capture options:
   --llm <name>      Who writes the narration (default: the plan backend).
   --no-notes        Capture the steps only; write no narration.
   --out <file>      Write the spec here instead of stdout.
+
+Repair options:
+  --url <baseUrl>   Check against a different deployment.
+  --out <file>      Write the mended spec here (default: in place).
+  --check           Report only; change nothing. Exits non-zero if broken.
+  --smart           Ask the LLM when word overlap finds no replacement.
 
 Plan options:
   --readme <path>   Give the planner your README for context.
@@ -41,6 +49,8 @@ function parseArgs(argv) {
         llm: process.env.ROLLCUT_LLM || DEFAULT_PLAN_PROVIDER,
         verify: true,
         notes: true,
+        check: false,
+        smart: false,
         narration: true,
         subtitles: true,
     };
@@ -56,6 +66,14 @@ function parseArgs(argv) {
         }
         if (flag === '--no-notes') {
             args.notes = false;
+            continue;
+        }
+        if (flag === '--check') {
+            args.check = true;
+            continue;
+        }
+        if (flag === '--smart') {
+            args.smart = true;
             continue;
         }
         if (flag === '--no-subtitles') {
@@ -156,8 +174,54 @@ async function runCapture(args) {
         console.log(result.yaml);
     }
 }
+/** Replay a spec against the live site and mend what no longer works. */
+async function runRepair(args) {
+    const specPath = args.spec;
+    if (!specPath) {
+        console.error(USAGE);
+        process.exit(1);
+    }
+    const { loadSpec } = await import('./spec/load.js');
+    const { repair } = await import('./plan/repair.js');
+    const yaml = (await import('js-yaml')).default;
+    const spec = await loadSpec(resolve(specPath));
+    console.error(`checking ${specPath} against ${args.url ?? spec.baseUrl}…`);
+    let matcher;
+    if (args.smart) {
+        const { lexicalMatcher, modelMatcher, withFallback } = await import('./plan/match.js');
+        // Deterministic first; the model is consulted only where it finds nothing.
+        matcher = withFallback(lexicalMatcher, modelMatcher(await loadPlanProvider(args.llm)));
+    }
+    const result = await repair(spec, {
+        url: args.url,
+        matcher,
+        onStep: (n, message) => console.error(`  step ${n}: ${message}`),
+    });
+    if (result.healthy) {
+        console.error('\nEvery step still works. Nothing to change.');
+        return;
+    }
+    for (const r of result.repairs) {
+        console.error(`\nstep ${r.step}: ${r.from}\n         -> ${r.to}  (${r.because})`);
+    }
+    for (const u of result.unrepaired) {
+        console.error(`\nstep ${u.step}: ${u.selector || '(no selector)'} — ${u.reason}`);
+    }
+    if (args.check) {
+        // A reporting run must not rewrite the file it was asked to inspect.
+        console.error(`\n${result.repairs.length} repairable, ${result.unrepaired.length} not.`);
+        process.exit(1);
+    }
+    const target = args.planOut ?? specPath;
+    await writeFile(target, yaml.dump(result.spec, { lineWidth: 100, quotingType: '"' }), 'utf8');
+    console.error(`\nwrote ${target} — read the diff before committing it.`);
+}
 async function main() {
     const args = parseArgs(process.argv.slice(2));
+    if (args.command === 'repair') {
+        await runRepair(args);
+        return;
+    }
     if (args.command === 'capture') {
         await runCapture(args);
         return;

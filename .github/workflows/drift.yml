@@ -1,0 +1,28 @@
+# Dogfood: does our own demo spec still match the live site?
+#
+# The demo workflow only runs on a release, by which point a broken spec has
+# already cost you the video. This runs on a schedule so drift surfaces while
+# there is time to fix it.
+name: Drift
+
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        spec: [demos/excalidraw.yaml, demos/teacheros.yaml]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./
+        with:
+          mode: check
+          spec: ${{ matrix.spec }}

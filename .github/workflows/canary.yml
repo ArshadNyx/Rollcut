@@ -49,6 +49,27 @@ jobs:
           pnpm install --frozen-lockfile
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
+      # Check before recording: a failed recording says a step broke, this says
+      # which one and what would fix it. Reported either way, so a spec that
+      # drifted is visible the day it happens rather than on release day.
+      - name: Check ${{ matrix.spec }} still matches the live site
+        id: check
+        continue-on-error: true
+        run: pnpm rollcut repair ${{ matrix.spec }} --check 2>&1 | tee repair.log
+
+      - name: Summarise any drift
+        if: steps.check.outcome == 'failure'
+        run: |
+          {
+            echo "### \`${{ matrix.spec }}\` no longer matches the site"
+            echo
+            echo '```'
+            cat repair.log
+            echo '```'
+            echo
+            echo "Run \`pnpm rollcut repair ${{ matrix.spec }}\` to apply the fixes."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Record ${{ matrix.spec }}
         # Narration adds nothing to a selector check and costs a model download.
         run: pnpm rollcut record ${{ matrix.spec }} --no-narration --out out-canary

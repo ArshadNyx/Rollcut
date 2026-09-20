@@ -1,6 +1,6 @@
 import { chromium } from '@playwright/test';
 import { specSchema, stepKind } from '../spec/schema.js';
-import { executeStep, resetPointer } from '../record/steps.js';
+import { executeStep, resetPointer, wait } from '../record/steps.js';
 /** A step that cannot be skipped without invalidating everything after it. */
 function isStructural(step) {
     return 'navigate' in step;
@@ -36,6 +36,9 @@ export async function verify(spec, options = {}) {
                     settle: 'navigate' in step,
                 });
                 kept.push(step);
+                // Same pacing as the recorder: replaying flat out fails steps that
+                // work perfectly well when the video is actually made.
+                await wait(spec.pauseMs);
                 options.onStep?.(n, kind, true);
             }
             catch (e) {

@@ -9,6 +9,7 @@ const observation: PageObservation = {
   title: 'Example App',
   headings: ['Welcome'],
   scrollable: true,
+  links: [],
   elements: [
     {
       selector: '[data-testid="new"]',
@@ -470,6 +471,7 @@ describe('multi-page plans', () => {
     title: 'Docs',
     headings: ['Getting started'],
     scrollable: true,
+    links: [],
     elements: [
       {
         selector: '#install',
@@ -545,5 +547,167 @@ describe('multi-page plans', () => {
     });
     expect(JSON.stringify(result.spec.steps)).not.toContain('#install');
     expect(result.rejected.join(' ')).toMatch(/not observed/);
+  });
+});
+
+describe('crawl policy is not an opinion about your product', () => {
+  it('does not refuse to look at sign-in pages', async () => {
+    const { DEFAULT_AVOID } = await import('../src/plan/observe.js');
+    // For a great many products the sign-in flow *is* the demo.
+    expect(DEFAULT_AVOID.test('/auth/login')).toBe(false);
+    expect(DEFAULT_AVOID.test('/signup')).toBe(false);
+    expect(DEFAULT_AVOID.test('/auth/school-code')).toBe(false);
+  });
+
+  it('still avoids what would end the session or cost money', async () => {
+    const { DEFAULT_AVOID } = await import('../src/plan/observe.js');
+    expect(DEFAULT_AVOID.test('/logout')).toBe(true);
+    expect(DEFAULT_AVOID.test('/checkout')).toBe(true);
+    expect(DEFAULT_AVOID.test('/account/billing')).toBe(true);
+  });
+});
+
+describe('a site can span subdomains', () => {
+  const marketing: PageObservation = {
+    url: 'https://www.example.com/',
+    path: '/',
+    title: 'Marketing',
+    headings: [],
+    scrollable: false,
+    links: ['https://app.example.com'],
+    elements: [
+      {
+        selector: 'a[href="https://app.example.com"]',
+        name: 'Open the app',
+        role: 'link',
+        tag: 'a',
+        navigates: true,
+        at: [10, 10],
+      },
+    ],
+  };
+  const app: PageObservation = {
+    url: 'https://app.example.com/auth/login',
+    requested: 'https://app.example.com/',
+    path: '/auth/login',
+    title: 'Sign in',
+    headings: [],
+    scrollable: false,
+    links: [],
+    elements: [
+      {
+        selector: '#email',
+        name: 'Email',
+        role: 'input:text',
+        tag: 'input',
+        navigates: false,
+        at: [20, 20],
+      },
+    ],
+  };
+  const site: SiteObservation = { origin: 'https://www.example.com', pages: [marketing, app] };
+
+  it('refers to another subdomain by absolute URL, not a bare path', async () => {
+    // `/auth/login` against the marketing origin is a different, wrong page.
+    const result = await plan({
+      url: marketing.url,
+      site,
+      verify: false,
+      provider: stub([
+        { kind: 'navigate', text: '/' },
+        { kind: 'navigate', text: '/auth/login' },
+        { kind: 'click', selector: '#email' },
+      ]),
+    });
+    expect(result.spec.steps).toContainEqual({ navigate: 'https://app.example.com/auth/login' });
+    expect(result.spec.steps).toContainEqual({ click: '#email' });
+  });
+
+  it('keeps using a bare path for the landing origin', async () => {
+    const result = await plan({
+      url: marketing.url,
+      site,
+      verify: false,
+      provider: stub([{ kind: 'navigate', text: '/' }]),
+    });
+    expect(result.spec.steps[0]).toEqual({ navigate: '/' });
+  });
+
+  it('follows a link across subdomains and validates against the page it reaches', async () => {
+    const result = await plan({
+      url: marketing.url,
+      site,
+      verify: false,
+      provider: stub([
+        { kind: 'navigate', text: '/' },
+        { kind: 'click', selector: 'a[href="https://app.example.com"]' },
+        { kind: 'click', selector: '#email' },
+      ]),
+    });
+    expect(result.rejected).toEqual([]);
+    expect(result.spec.steps).toContainEqual({ click: '#email' });
+  });
+});
+
+describe('sameSite', () => {
+  it('treats a marketing site and its app subdomain as one product', async () => {
+    const { sameSite } = await import('../src/plan/observe.js');
+    expect(sameSite('app.teacherosapp.com', 'www.teacherosapp.com')).toBe(true);
+    expect(sameSite('admin.example.com', 'example.com')).toBe(true);
+  });
+
+  it('does not wander onto somebody else"s site', async () => {
+    const { sameSite } = await import('../src/plan/observe.js');
+    expect(sameSite('github.com', 'www.example.com')).toBe(false);
+    expect(sameSite('teacher-os.github.io', 'www.teacherosapp.com')).toBe(false);
+  });
+});
+
+describe('provider errors say what to do', () => {
+  /** Stands in for a provider responding with a given status and body. */
+  function respond(status: number, body: string, headers: Record<string, string> = {}) {
+    return async () =>
+      new Response(body, { status, headers: { 'content-type': 'application/json', ...headers } });
+  }
+
+  async function callWith(fetchImpl: typeof fetch): Promise<string> {
+    const original = globalThis.fetch;
+    globalThis.fetch = fetchImpl;
+    process.env.GROQ_API_KEY = 'test-key';
+    try {
+      const { loadPlanProvider } = await import('../src/plan/provider.js');
+      const provider = await loadPlanProvider('groq');
+      await provider.propose({ system: 's', user: 'u', schema: {}, maxSteps: 3 });
+      return '';
+    } catch (e) {
+      return (e as Error).message;
+    } finally {
+      globalThis.fetch = original;
+      delete process.env.GROQ_API_KEY;
+    }
+  }
+
+  it('calls a rate limit a rate limit, not a bad model', async () => {
+    // The body names the model, so a naive check sends the user to change it.
+    const message = await callWith(
+      respond(429, '{"error":{"message":"Rate limit reached for model `x` ... TPM"}}', {
+        'retry-after': '30',
+      }),
+    );
+    expect(message).toMatch(/rate limiting/i);
+    expect(message).toMatch(/30s/);
+    expect(message).not.toMatch(/a model your account can use/);
+  });
+
+  it('still points at the model when the model really is wrong', async () => {
+    const message = await callWith(
+      respond(400, '{"error":{"message":"model `nope` does not exist"}}'),
+    );
+    expect(message).toMatch(/ROLLCUT_PLAN_MODEL/);
+  });
+
+  it('still points at the key when the key is wrong', async () => {
+    const message = await callWith(respond(401, '{"error":{"message":"Invalid API Key"}}'));
+    expect(message).toMatch(/GROQ_API_KEY/);
   });
 });

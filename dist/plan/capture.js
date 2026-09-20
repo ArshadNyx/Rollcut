@@ -2,13 +2,20 @@ import { chromium } from '@playwright/test';
 import { normalisePath, selectorHelpersScript } from './observe.js';
 /** The floating bar and the listeners that report what the person does. */
 export function recorderScript() {
-    return `
+    return `(function () {
+  // Top frame only. The script is installed in every frame, so a third-party
+  // widget in an iframe — a Google sign-in button, a payment field, a chat
+  // bubble — would mount its own recording bar, clipped to the widget's
+  // bounds and unreachable by the top frame's tidy-up.
+  if (window.top !== window.self) return;
+
   ${selectorHelpersScript()}
 
   if (!window.__rollcutCapture) {
     window.__rollcutCapture = true;
 
     var bar = document.createElement('div');
+    bar.id = '__rollcut-capture-bar';
     bar.style.cssText =
       'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:2147483647;' +
       'background:#111;color:#fff;font:13px system-ui;padding:10px 14px;border-radius:999px;' +
@@ -25,17 +32,45 @@ export function recorderScript() {
     bar.appendChild(dot); bar.appendChild(label); bar.appendChild(done);
 
     var mount = function () {
-      if (document.body && !document.getElementById('__rollcut-capture-bar')) {
-        bar.id = '__rollcut-capture-bar';
-        document.body.appendChild(bar);
+      // Nothing here may throw: this runs before the document exists, and an
+      // exception would abort the rest of the script, taking every listener
+      // with it — the bar would show while recording nothing.
+      try {
+        var root = document.body || document.documentElement;
+        if (!root) return;
+        var existing = document.querySelectorAll('#__rollcut-capture-bar');
+        for (var i = 0; i < existing.length; i++) {
+          if (existing[i] !== bar) existing[i].remove();
+        }
+        if (bar.parentNode !== root) root.appendChild(bar);
+      } catch (e) {
+        /* try again on the next tick */
       }
     };
-    mount();
-    document.addEventListener('DOMContentLoaded', mount);
+
+    // Mounted only once the page has finished loading. Adding a node before a
+    // framework hydrates makes its markup disagree with the server's, which
+    // React reports as a hydration error and recovers from by re-rendering —
+    // leaving a stranded copy of the bar behind.
+    var startMounting = function () {
+      mount();
+      try {
+        if (window.MutationObserver && document.body) {
+          new MutationObserver(mount).observe(document.body, { childList: true });
+        }
+      } catch (e) {
+        /* an observer is an optimisation, not a requirement */
+      }
+      // A late re-render can still detach it; a slow poll costs nothing and
+      // does not depend on an observer being available.
+      setInterval(mount, 1000);
+    };
+
+    if (document.readyState === 'complete') startMounting();
+    else window.addEventListener('load', startMounting);
 
     var count = 0;
     var send = function (action) {
-      // The bar is Rollcut's own UI; it must never end up in the spec.
       count++;
       label.textContent = 'Recording — ' + count + ' step' + (count === 1 ? '' : 's');
       window.__rollcutRecord(action);
@@ -113,7 +148,7 @@ export function recorderScript() {
       }, 400);
     }, true);
   }
-`;
+})()`;
 }
 /**
  * Open a real browser and record what the person does.
