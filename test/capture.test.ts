@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { toSteps } from '../src/plan/narrate.js';
+import { narrate, toSteps } from '../src/plan/narrate.js';
 import type { CaptureResult } from '../src/plan/capture.js';
+import type { PlanProvider } from '../src/plan/provider.js';
 
 function capture(actions: CaptureResult['actions']): CaptureResult {
   return { origin: 'https://example.com', startPath: '/app', actions };
@@ -133,5 +134,59 @@ describe('toSteps — what a real run exposed', () => {
     );
     expect(steps).toContainEqual({ click: '#a' });
     expect(steps).toContainEqual({ click: '#b' });
+  });
+});
+
+describe('what the narrator is told', () => {
+  /** Captures the prompt instead of answering it. */
+  function spy(): { provider: PlanProvider; prompt: () => string } {
+    let seen = '';
+    return {
+      provider: {
+        name: 'spy',
+        propose: async (request) => {
+          seen = request.user;
+          return { notes: [] };
+        },
+      },
+      prompt: () => seen,
+    };
+  }
+
+  const session = capture([
+    { kind: 'navigate', selector: '/', text: 'TeacherOS', atMs: 0 },
+    { kind: 'click', selector: 'input[placeholder="you@school.edu"]', atMs: 1000 },
+    { kind: 'type', selector: 'input[placeholder="you@school.edu"]', text: 'a@b.com', atMs: 1200 },
+    { kind: 'click', selector: 'input[type="password"]', atMs: 2000 },
+    { kind: 'type', selector: 'input[type="password"]', text: 'hunter2', atMs: 2200 },
+  ]);
+
+  it('names the field that was filled', async () => {
+    // Told only "fill that field in", the model cannot tell an email box from
+    // a password box — on a real capture it narrated the email step as
+    // "Provide the teacher's password".
+    const { provider, prompt } = spy();
+    await narrate({ capture: session, provider });
+    expect(prompt()).toContain('input[placeholder="you@school.edu"]');
+    expect(prompt()).toContain('input[type="password"]');
+  });
+
+  it('never includes what was typed', async () => {
+    const { provider, prompt } = spy();
+    await narrate({ capture: session, provider });
+    expect(prompt()).not.toContain('hunter2');
+    expect(prompt()).not.toContain('a@b.com');
+  });
+
+  it('passes the page title through as context', async () => {
+    const { provider, prompt } = spy();
+    await narrate({ capture: session, provider });
+    expect(prompt()).toContain('TeacherOS');
+  });
+
+  it('marks a focus click so it is not narrated as an action', async () => {
+    const { provider, prompt } = spy();
+    await narrate({ capture: session, provider });
+    expect(prompt()).toContain('skip this one');
   });
 });

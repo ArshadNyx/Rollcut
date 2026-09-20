@@ -49,7 +49,8 @@ Rules:
   a feature. Do not infer what something does from the text in a selector; if
   you are unsure what a step accomplishes, leave it null.
 - Never invent features you cannot see in the steps.
-- Do not read out credentials, codes or email addresses.`;
+- Do not read out credentials, codes or email addresses. You are told which
+  field was filled but never with what, and that is deliberate.`;
 
 /** Turn recorded actions into spec steps, with waits where the person paused. */
 export function toSteps(
@@ -157,6 +158,7 @@ function describe(
   step: Record<string, unknown>,
   next: Record<string, unknown> | undefined,
   title?: string,
+  previous?: Record<string, unknown>,
 ): string {
   if ('navigate' in step) {
     return `open ${String(step.navigate)}${title ? ` — the "${title}" screen` : ''}`;
@@ -166,7 +168,13 @@ function describe(
       ? `focus a field (skip this one — narrate the next step instead)`
       : `click ${String(step.click)}`;
   }
-  if ('type' in step) return `fill that field in`;
+  if ('type' in step) {
+    // Name the field, never the value. Without the field the model cannot tell
+    // an email box from a password box and narrates one as the other; with the
+    // value it would read credentials aloud.
+    const field = previous && 'click' in previous ? String(previous.click) : undefined;
+    return field ? `fill in the field ${field}` : 'fill in the focused field';
+  }
   if ('press' in step) return `press ${String(step.press)}`;
   if ('scroll' in step) return `scroll ${String(step.scroll)}px`;
   if ('wait' in step) return `wait ${String(step.wait)}ms`;
@@ -202,7 +210,7 @@ export async function narrate(options: NarrateOptions): Promise<NarrateResult> {
   if (options.provider) {
     log(`writing narration with ${options.provider.name}…`);
     const listing = steps
-      .map((s, i) => `${i + 1}. ${describe(s, steps[i + 1], titles.get(i))}`)
+      .map((s, i) => `${i + 1}. ${describe(s, steps[i + 1], titles.get(i), steps[i - 1])}`)
       .join('\n');
     const user = [
       `Site: ${options.capture.origin}`,
