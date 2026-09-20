@@ -9,6 +9,9 @@ out/
 .DS_Store
 
 # Local Claude Code / tooling state
+# CLAUDE.md is the working brief — instructions and business plan, not docs
+# for users of this Action.
+CLAUDE.md
 .claude/settings.local.json
 .claude-flow/
 
