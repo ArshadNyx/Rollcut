@@ -12,11 +12,15 @@ const MAX_HEADINGS = 20;
  * already resolved against the live DOM — guessing from raw HTML is how
  * generated specs end up referencing elements that were never there.
  */
-function collectorScript(maxElements, maxHeadings) {
-    return `(() => {
-  // Inside a quoted attribute value only a quote or backslash needs escaping.
-  // CSS.escape would also escape '/' and ':', producing selectors that work but
-  // are painful to read in a spec a human has to review.
+/**
+ * Browser-side selector helpers, shared by observation and capture.
+ *
+ * Both have to name elements the same way: a spec written by capture and one
+ * proposed by the planner should be indistinguishable, and a selector that
+ * works in one must work in the other.
+ */
+export function selectorHelpersScript() {
+    return `
   var attr = function (v) { return v.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"'); };
   var ident = function (v) { return window.CSS && window.CSS.escape ? window.CSS.escape(v) : v; };
   var generated = function (id) { return /^[a-z]*[0-9a-f]{6,}$/i.test(id) || /^(radix|headless|mui|react|:r)/i.test(id); };
@@ -56,7 +60,7 @@ function collectorScript(maxElements, maxHeadings) {
     // Last resort: match on visible text. Component libraries that emit only
     // class names — Tamagui, many React Native Web apps — leave nothing else,
     // and without this those pages yield no targets at all.
-    var text = clean(el.textContent).slice(0, 40);
+    var text = window.__rollcutClean(el.textContent).slice(0, 40);
     if (text.length >= 2) return tag + ':has-text("' + attr(text) + '")';
     return null;
   };
@@ -79,6 +83,38 @@ function collectorScript(maxElements, maxHeadings) {
     return tag;
   };
 
+
+  window.__rollcutSelector = selectorFor;
+  window.__rollcutClean = clean;
+
+  // has-text is Playwright syntax, not CSS, so querySelectorAll cannot check
+  // it — count same-tag elements carrying the same text instead.
+  window.__rollcutUnique = function (el, selector) {
+    if (!selector) return false;
+    if (selector.indexOf(':has-text("') !== -1) {
+      var wanted = clean(el.textContent).slice(0, 40);
+      var sameTag = document.querySelectorAll(el.tagName.toLowerCase());
+      var hits = 0;
+      for (var t = 0; t < sameTag.length; t++) {
+        if (clean(sameTag[t].textContent).indexOf(wanted) !== -1) hits++;
+      }
+      return hits === 1;
+    }
+    try {
+      return document.querySelectorAll(selector).length === 1;
+    } catch (e) {
+      return false;
+    }
+  };
+`;
+}
+function collectorScript(maxElements, maxHeadings) {
+    return `(() => {
+  // Inside a quoted attribute value only a quote or backslash needs escaping.
+  // CSS.escape would also escape '/' and ':', producing selectors that work but
+  // are painful to read in a spec a human has to review.
+  ${selectorHelpersScript()}
+
   var candidates = Array.prototype.slice.call(document.querySelectorAll(
     'a[href], button, input, textarea, select, canvas, [role], [onclick], [data-testid], [data-test-id]'
   ));
@@ -92,25 +128,12 @@ function collectorScript(maxElements, maxHeadings) {
     var style = window.getComputedStyle(el);
     if (style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0') continue;
 
-    var selector = selectorFor(el);
+    var selector = window.__rollcutSelector(el);
     if (!selector || seen[selector]) continue;
 
-    // Keep only selectors resolving to exactly one element, so a generated step
-    // cannot silently act on the wrong one. has-text is Playwright syntax, not
-    // CSS, so querySelectorAll cannot check it — count same-tag elements
-    // carrying the same text instead, which is what it matches on.
-    var textMatch = selector.indexOf(':has-text("') !== -1;
-    if (textMatch) {
-      var wanted = clean(el.textContent).slice(0, 40);
-      var sameTag = document.querySelectorAll(el.tagName.toLowerCase());
-      var hits = 0;
-      for (var t = 0; t < sameTag.length; t++) {
-        if (clean(sameTag[t].textContent).indexOf(wanted) !== -1) hits++;
-      }
-      if (hits !== 1) continue;
-    } else if (document.querySelectorAll(selector).length !== 1) {
-      continue;
-    }
+    // Keep only selectors resolving to exactly one element, so a step cannot
+    // silently act on the wrong one.
+    if (!window.__rollcutUnique(el, selector)) continue;
     seen[selector] = true;
 
     var hrefAttr = el.getAttribute('href') || '';

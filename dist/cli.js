@@ -5,6 +5,7 @@ import { plan } from './plan/planner.js';
 import { DEFAULT_PLAN_PROVIDER, PLAN_PROVIDERS, loadPlanProvider } from './plan/provider.js';
 const USAGE = `rollcut record <spec.yaml> [options]
 rollcut plan <url> [options]
+rollcut capture <url> [options]
 
   --url <baseUrl>   Override the spec's baseUrl (preview deployments).
   --out <dir>       Output directory (default: out).
@@ -12,6 +13,12 @@ rollcut plan <url> [options]
   --tts <name>      TTS provider: ${Object.keys(PROVIDERS).join(' | ')} (default: ${DEFAULT_PROVIDER}).
   --no-narration    Record silently; skip TTS and subtitles.
   --no-subtitles    Narrate, but do not burn subtitles.
+
+Capture options:
+  --readme <path>   Give the narrator your README for context.
+  --llm <name>      Who writes the narration (default: the plan backend).
+  --no-notes        Capture the steps only; write no narration.
+  --out <file>      Write the spec here instead of stdout.
 
 Plan options:
   --readme <path>   Give the planner your README for context.
@@ -22,6 +29,7 @@ Plan options:
 
 Examples:
   pnpm rollcut record demos/excalidraw.yaml
+  pnpm rollcut capture https://app.example.com --out demos/app.yaml
   pnpm rollcut plan https://excalidraw.com --readme README.md`;
 function parseArgs(argv) {
     const [command, spec, ...rest] = argv;
@@ -32,6 +40,7 @@ function parseArgs(argv) {
         tts: process.env.ROLLCUT_TTS || DEFAULT_PROVIDER,
         llm: process.env.ROLLCUT_LLM || DEFAULT_PLAN_PROVIDER,
         verify: true,
+        notes: true,
         narration: true,
         subtitles: true,
     };
@@ -43,6 +52,10 @@ function parseArgs(argv) {
         }
         if (flag === '--no-verify') {
             args.verify = false;
+            continue;
+        }
+        if (flag === '--no-notes') {
+            args.notes = false;
             continue;
         }
         if (flag === '--no-subtitles') {
@@ -110,8 +123,45 @@ async function runPlan(args) {
         console.error('\nReview this, save it, then run `rollcut record` on it.');
     }
 }
+/** Record a real run and turn it into a spec. Never records video. */
+async function runCapture(args) {
+    const url = args.spec;
+    if (!url) {
+        console.error(USAGE);
+        process.exit(1);
+    }
+    const { capture } = await import('./plan/capture.js');
+    const { narrate } = await import('./plan/narrate.js');
+    console.error(`opening ${url} — click through your demo, then press Finish.`);
+    const captured = await capture({
+        url,
+        onAction: (a) => console.error(`  ${a.kind}${a.selector ? ` ${a.selector}` : ''}${a.key ? ` ${a.key}` : ''}`),
+    });
+    if (captured.actions.length === 0) {
+        throw new Error('Nothing was recorded. Interact with the page before pressing Finish.');
+    }
+    const readme = args.readme ? await readFile(args.readme, 'utf8') : undefined;
+    const result = await narrate({
+        capture: captured,
+        provider: args.notes ? await loadPlanProvider(args.llm) : undefined,
+        readme,
+        log: (m) => console.error(m),
+    });
+    if (args.planOut) {
+        await writeFile(args.planOut, result.yaml, 'utf8');
+        console.error(`\nwrote ${args.planOut} — ${result.spec.steps.length} steps, ${result.narrated} narrated. Then:`);
+        console.error(`  pnpm rollcut record ${args.planOut}`);
+    }
+    else {
+        console.log(result.yaml);
+    }
+}
 async function main() {
     const args = parseArgs(process.argv.slice(2));
+    if (args.command === 'capture') {
+        await runCapture(args);
+        return;
+    }
     if (args.command === 'plan') {
         await runPlan(args);
         return;

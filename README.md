@@ -117,6 +117,28 @@ Two providers sit behind one interface (`src/tts/provider.ts`):
 
 Use `--no-narration` (or `narration: false`) to skip TTS entirely.
 
+## Capturing a spec from a real run
+
+The surest way to get a spec is to perform the demo once:
+
+```bash
+pnpm rollcut capture https://app.example.com --readme README.md --out demos/app.yaml
+```
+
+A browser opens with a recording bar. Click through your product — sign in,
+open a modal, fill a form — then press **Finish**. Rollcut writes the spec from
+what you actually did, and a model writes the narration for it.
+
+This is the answer for anything a crawler cannot reach: pages behind a login, a
+multi-step wizard, or a form that needs a real value. A planner can only guess
+that a school code looks like its placeholder; capture saw you type the real
+one.
+
+The split is deliberate. Capture gets the mechanics exactly right because it
+watched them happen — selectors, order, the values you entered, and the pauses
+you took. The model only supplies words for steps it is told occurred; it never
+invents one. Use `--no-notes` to skip narration entirely.
+
 ## Planning a spec (experimental)
 
 Writing a spec by hand means hunting for selectors. `rollcut plan` proposes one
