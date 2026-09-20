@@ -5,10 +5,13 @@ import { collectTargets } from './observe.js';
 import { lexicalMatcher } from './match.js';
 /** The identifying text inside a selector, and the tag it was attached to. */
 export function readSelector(selector) {
-    const attr = /^(?:([a-z0-9]+))?\[(?:data-testid|aria-label|title|placeholder|name|href|type)="(.*)"\]$/i.exec(selector);
+    // Any operator and either quote style: a spec written by hand is as likely
+    // to say [title^='Rectangle'] as [title="Rectangle"], and failing to parse
+    // one leaves the raw selector standing in for its own meaning.
+    const attr = /^(?:([a-z0-9]+))?\[[a-z-]+(?:[~^$*|]?=)?(?:"([^"]*)"|'([^']*)')?\]$/i.exec(selector);
     if (attr)
-        return { text: attr[2] ?? '', tag: attr[1] };
-    const hasText = /^([a-z0-9]+):has-text\("(.*)"\)$/i.exec(selector);
+        return { text: attr[2] ?? attr[3] ?? '', tag: attr[1] };
+    const hasText = /^([a-z0-9]+):has-text\(["'](.*)["']\)$/i.exec(selector);
     if (hasText)
         return { text: hasText[2] ?? '', tag: hasText[1] };
     const id = /^#(.+)$/.exec(selector);
@@ -16,12 +19,40 @@ export function readSelector(selector) {
         return { text: id[1] ?? '' };
     return { text: selector };
 }
+/**
+ * Words that describe how an element is addressed rather than what it is.
+ *
+ * Without this, two unrelated controls both named by a `title` attribute share
+ * the token "title" and look half alike — which is how a broken selector was
+ * once "repaired" to an unrelated button.
+ */
+const STRUCTURAL = new Set([
+    'title',
+    'href',
+    'aria',
+    'label',
+    'placeholder',
+    'data',
+    'testid',
+    'test',
+    'id',
+    'name',
+    'type',
+    'role',
+    'class',
+    'button',
+    'input',
+    'div',
+    'span',
+    'has',
+    'text',
+]);
 function tokens(value) {
     return value
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, ' ')
         .split(' ')
-        .filter((t) => t.length > 1);
+        .filter((t) => t.length > 1 && !STRUCTURAL.has(t));
 }
 /**
  * How likely a target is the thing the broken selector used to point at.

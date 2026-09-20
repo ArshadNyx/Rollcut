@@ -113,3 +113,30 @@ describe('nothing site-specific is baked in', () => {
     expect(rank('button:has-text("Verify")', page, 4).length).toBe(4);
   });
 });
+
+describe('a selector must not match on how it is written', () => {
+  it('reads every attribute form, not just the double-quoted one', () => {
+    // A spec written by hand is as likely to use ^= and single quotes; failing
+    // to parse one leaves the raw selector standing in for its own meaning.
+    expect(readSelector("[title^='Rectangle']").text).toBe('Rectangle');
+    expect(readSelector('[title^="Rectangle"]').text).toBe('Rectangle');
+    expect(readSelector("[title*='Rect']").text).toBe('Rect');
+    expect(readSelector("input[placeholder^='STX']")).toEqual({ text: 'STX', tag: 'input' });
+    expect(readSelector("button:has-text('Verify')").text).toBe('Verify');
+  });
+
+  it('never matches two controls just because both use a title attribute', () => {
+    // This exact pair was once "repaired" on a live site: the only thing the
+    // two shared was the word "title" from the selector syntax itself.
+    const live = target('[title="Live collaboration..."]', 'Live collaboration...');
+    expect(score("[title^='Nope']", live)).toBeLessThan(0.34);
+    expect(rank("[title^='Nope']", [live])).toEqual([]);
+  });
+
+  it('still finds a genuine rename once the noise is gone', () => {
+    const rect = target('[data-testid="toolbar-rectangle"]', 'Rectangle');
+    expect(rank("[title^='Rectangle tool']", [rect])[0]?.selector).toBe(
+      '[data-testid="toolbar-rectangle"]',
+    );
+  });
+});
