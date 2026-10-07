@@ -14,7 +14,7 @@ rollcut repair <spec.yaml> [options]
   --voice <name>    Override the spec's voice (names are provider-specific).
   --tts <name>      TTS provider: ${Object.keys(PROVIDERS).join(' | ')} (default: ${DEFAULT_PROVIDER}).
   --no-narration    Record silently; skip TTS and subtitles.
-  --no-subtitles    Narrate, but do not burn subtitles.
+  --no-subtitles    Narrate, but do not burn subtitles (demo.srt is still written).
 
 Capture options:
   --readme <path>   Give the narrator your README for context.
