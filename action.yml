@@ -49,7 +49,7 @@ inputs:
     required: false
     default: 'true'
   subtitles:
-    description: Burn subtitles into the mp4.
+    description: Burn subtitles into the mp4. demo.srt is written either way whenever there is narration.
     required: false
     default: 'true'
   out:
