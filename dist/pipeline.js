@@ -23,7 +23,7 @@ export async function runPipeline(options) {
     await rm(workDir, { recursive: true, force: true });
     await mkdir(workDir, { recursive: true });
     const spec = await loadSpec(resolve(options.specPath));
-    log(`spec: ${options.specPath} — ${spec.steps.length} steps @ ${spec.viewport.width}x${spec.viewport.height}`);
+    log(`spec: ${options.specPath} — ${spec.steps.length} steps @ ${spec.viewport.width}x${spec.viewport.height}${spec.scale > 1 ? ` (${spec.scale}x)` : ''}`);
     const narration = new Map();
     if (options.narration !== false) {
         const notes = spec.steps
@@ -48,13 +48,19 @@ export async function runPipeline(options) {
         onStep: (n, what) => log(`  step ${n}: ${what}`),
     });
     log('assembling…');
+    // The video is `scale` times the viewport; zooms and subtitles work in its pixels.
+    const frame = {
+        width: spec.viewport.width * spec.scale,
+        height: spec.viewport.height * spec.scale,
+    };
     const result = await assemble(raw, {
         outDir,
         workDir,
         cues,
         subtitles: options.subtitles,
-        viewport: spec.viewport,
-        zooms,
+        viewport: frame,
+        scale: spec.scale,
+        zooms: zooms.map((z) => ({ ...z, x: z.x * spec.scale, y: z.y * spec.scale })),
     });
     await rm(workDir, { recursive: true, force: true });
     return { ...result, steps: spec.steps.length, lines: cues.length };

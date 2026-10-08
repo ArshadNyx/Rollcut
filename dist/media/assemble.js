@@ -124,7 +124,14 @@ export async function probeDurationSeconds(file) {
 }
 export async function assemble(raw, options) {
     const { outDir, workDir, cues } = options;
-    const style = { ...DEFAULT_STYLE, ...(options.viewport ?? {}) };
+    const k = options.scale ?? 1;
+    const style = {
+        ...DEFAULT_STYLE,
+        fontSize: DEFAULT_STYLE.fontSize * k,
+        marginH: DEFAULT_STYLE.marginH * k,
+        marginV: DEFAULT_STYLE.marginV * k,
+        ...(options.viewport ?? {}),
+    };
     // The sidecar SRT ships whenever there is narration, so a clean video can
     // still be captioned by a player or re-timed by hand. `subtitles` only
     // decides whether the text is also burned into the picture.

@@ -27,6 +27,9 @@ export const specSchema = z
       .object({ width: z.number().int().positive(), height: z.number().int().positive() })
       .strict()
       .default({ width: 1280, height: 720 }),
+    // Device pixels per CSS pixel. 2 records a HiDPI video (twice the width
+    // and height of the viewport) with the same page layout.
+    scale: z.union([z.literal(1), z.literal(2)]).default(1),
     pauseMs: z.number().int().nonnegative().default(700),
     voice: z.string().optional(),
     steps: z.array(stepSchema).min(1),

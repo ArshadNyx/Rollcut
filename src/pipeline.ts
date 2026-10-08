@@ -45,7 +45,7 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRes
 
   const spec = await loadSpec(resolve(options.specPath));
   log(
-    `spec: ${options.specPath} — ${spec.steps.length} steps @ ${spec.viewport.width}x${spec.viewport.height}`,
+    `spec: ${options.specPath} — ${spec.steps.length} steps @ ${spec.viewport.width}x${spec.viewport.height}${spec.scale > 1 ? ` (${spec.scale}x)` : ''}`,
   );
 
   const narration = new Map<number, Narration>();
@@ -82,13 +82,19 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRes
   });
 
   log('assembling…');
+  // The video is `scale` times the viewport; zooms and subtitles work in its pixels.
+  const frame = {
+    width: spec.viewport.width * spec.scale,
+    height: spec.viewport.height * spec.scale,
+  };
   const result = await assemble(raw, {
     outDir,
     workDir,
     cues,
     subtitles: options.subtitles,
-    viewport: spec.viewport,
-    zooms,
+    viewport: frame,
+    scale: spec.scale,
+    zooms: zooms.map((z) => ({ ...z, x: z.x * spec.scale, y: z.y * spec.scale })),
   });
   await rm(workDir, { recursive: true, force: true });
 

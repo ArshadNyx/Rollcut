@@ -18,6 +18,8 @@ export interface AssembleOptions {
   viewport?: { width: number; height: number };
   /** Clicks to zoom toward. */
   zooms?: ZoomEvent[];
+  /** Device pixels per CSS pixel of the video; subtitles grow with it. */
+  scale?: number;
 }
 
 export interface AssembleResult {
@@ -174,7 +176,14 @@ export async function probeDurationSeconds(file: string): Promise<number> {
 export async function assemble(raw: string, options: AssembleOptions): Promise<AssembleResult> {
   const { outDir, workDir, cues } = options;
 
-  const style = { ...DEFAULT_STYLE, ...(options.viewport ?? {}) };
+  const k = options.scale ?? 1;
+  const style = {
+    ...DEFAULT_STYLE,
+    fontSize: DEFAULT_STYLE.fontSize * k,
+    marginH: DEFAULT_STYLE.marginH * k,
+    marginV: DEFAULT_STYLE.marginV * k,
+    ...(options.viewport ?? {}),
+  };
 
   // The sidecar SRT ships whenever there is narration, so a clean video can
   // still be captioned by a player or re-timed by hand. `subtitles` only

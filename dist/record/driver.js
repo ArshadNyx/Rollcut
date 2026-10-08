@@ -18,12 +18,15 @@ export async function record(spec, options) {
     const videoDir = join(options.workDir, 'raw');
     await mkdir(videoDir, { recursive: true });
     const browser = await chromium.launch({
-        args: ['--force-device-scale-factor=1', '--hide-scrollbars'],
+        args: [`--force-device-scale-factor=${spec.scale}`, '--hide-scrollbars'],
     });
     const context = await browser.newContext({
         viewport: spec.viewport,
-        deviceScaleFactor: 1,
-        recordVideo: { dir: videoDir, size: spec.viewport },
+        deviceScaleFactor: spec.scale,
+        recordVideo: {
+            dir: videoDir,
+            size: { width: spec.viewport.width * spec.scale, height: spec.viewport.height * spec.scale },
+        },
     });
     const page = await context.newPage();
     // Recording is running from here on; every cue is measured against this.
