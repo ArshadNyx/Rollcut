@@ -49,7 +49,10 @@ export async function runPipeline(options) {
     });
     log('assembling…');
     // The video is `scale` times the viewport; zooms and subtitles work in its pixels.
-    const frame = { width: spec.viewport.width * spec.scale, height: spec.viewport.height * spec.scale };
+    const frame = {
+        width: spec.viewport.width * spec.scale,
+        height: spec.viewport.height * spec.scale,
+    };
     const result = await assemble(raw, {
         outDir,
         workDir,
