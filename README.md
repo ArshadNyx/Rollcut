@@ -88,7 +88,7 @@ Any step may carry a `note`. Notes become narration and subtitles; steps without
 | `voice`             | —                     | Provider-specific voice name.                                                                                                 |
 | `tts`               | `kokoro`              | `kokoro` (local) or `edge`.                                                                                                   |
 | `narration`         | `true`                | Set `false` for a silent video.                                                                                               |
-| `subtitles`         | `true`                | Burn subtitles into the MP4.                                                                                                  |
+| `subtitles`         | `true`                | Burn subtitles into the MP4. `demo.srt` is written either way whenever there is narration.                                    |
 | `token`             | `${{ github.token }}` | Used to upload release assets.                                                                                                |
 
 Outputs: `mp4`, `gif`, `duration-seconds`, `asset-urls`.
@@ -329,7 +329,7 @@ rollcut plan <url> [options]
   --voice <name>    Provider-specific voice name.
   --tts <name>      kokoro | edge (default: kokoro).
   --no-narration    Record silently.
-  --no-subtitles    Narrate without burning subtitles.
+  --no-subtitles    Narrate without burning subtitles (demo.srt is still written).
 ```
 
 Set `ROLLCUT_DEBUG=1` to see every ffmpeg invocation in full.

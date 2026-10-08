@@ -185,14 +185,18 @@ export async function assemble(raw: string, options: AssembleOptions): Promise<A
     ...(options.viewport ?? {}),
   };
 
-  let assPath: string | undefined;
+  // The sidecar SRT ships whenever there is narration, so a clean video can
+  // still be captioned by a player or re-timed by hand. `subtitles` only
+  // decides whether the text is also burned into the picture.
   let srtOut: string | undefined;
+  if (cues.length > 0) {
+    srtOut = join(outDir, 'demo.srt');
+    await writeFile(srtOut, toSrt(cues), 'utf8');
+  }
+  let assPath: string | undefined;
   if (options.subtitles !== false && cues.length > 0) {
     assPath = join(workDir, 'demo.ass');
     await writeFile(assPath, toAss(cues, style), 'utf8');
-    // Sidecar SRT ships alongside the video for players and manual re-timing.
-    srtOut = join(outDir, 'demo.srt');
-    await writeFile(srtOut, toSrt(cues), 'utf8');
   }
 
   // The GIF gets the same zoom, so the two tell the same story.
