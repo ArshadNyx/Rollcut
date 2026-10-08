@@ -124,7 +124,14 @@ export async function probeDurationSeconds(file) {
 }
 export async function assemble(raw, options) {
     const { outDir, workDir, cues } = options;
-    const style = { ...DEFAULT_STYLE, ...(options.viewport ?? {}) };
+    const k = options.scale ?? 1;
+    const style = {
+        ...DEFAULT_STYLE,
+        fontSize: DEFAULT_STYLE.fontSize * k,
+        marginH: DEFAULT_STYLE.marginH * k,
+        marginV: DEFAULT_STYLE.marginV * k,
+        ...(options.viewport ?? {}),
+    };
     let assPath;
     let srtOut;
     if (options.subtitles !== false && cues.length > 0) {

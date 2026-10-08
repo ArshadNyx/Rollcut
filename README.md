@@ -48,6 +48,7 @@ You get `out/demo.mp4`, `out/demo.gif` and `out/demo.srt`. The record step takes
 ```yaml
 baseUrl: https://excalidraw.com
 viewport: { width: 1280, height: 720 }
+scale: 1 # 2 records a HiDPI video (2560x1440 here) with the same layout
 pauseMs: 700 # pause after every step
 steps:
   - navigate: /
