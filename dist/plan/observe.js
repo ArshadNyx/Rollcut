@@ -256,6 +256,46 @@ async function settle(page, maxElements) {
         await page.waitForTimeout(SETTLE_POLL_MS);
     }
 }
+const PER_FAMILY = 3;
+/**
+ * The family a target belongs to: links that differ only by a query value,
+ * links two or more segments deep (items in a list), and numeric buttons
+ * (sizes, pages). Keeping a few of each leaves room for the rest of the page.
+ */
+export function familyOf(selector) {
+    const href = selector.match(/^a\[href="([^"]+)"\]$/)?.[1];
+    if (href) {
+        const q = href.indexOf('?');
+        if (q >= 0) {
+            const name = href.slice(q + 1).split('=')[0];
+            return `a[href="${href.slice(0, q)}?${name}=*"]`;
+        }
+        const segments = href.split('/').filter(Boolean);
+        if (!/^https?:/.test(href) && segments.length >= 2)
+            return `a[href="/${segments[0]}/*"]`;
+        return selector;
+    }
+    const text = selector.match(/^button:has-text\("([^"]*)"\)$/)?.[1];
+    if (text && /^[\d.,+\s]+[A-Za-z]{0,2}$/.test(text.trim()))
+        return 'button:has-text(<number>)';
+    return selector;
+}
+/** At most PER_FAMILY of each family, in document order, then the budget. */
+export function trimByFamily(elements, max) {
+    const seen = new Map();
+    const kept = [];
+    for (const e of elements) {
+        const f = familyOf(e.selector);
+        const n = seen.get(f) ?? 0;
+        if (n >= PER_FAMILY)
+            continue;
+        seen.set(f, n + 1);
+        kept.push(e);
+        if (kept.length >= max)
+            break;
+    }
+    return kept;
+}
 async function observeInPage(page, url, maxElements) {
     try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
@@ -265,7 +305,11 @@ async function observeInPage(page, url, maxElements) {
     }
     await page.waitForLoadState('load').catch(() => undefined);
     await settle(page, maxElements);
-    const observed = (await page.evaluate(collectorScript(maxElements, MAX_HEADINGS)));
+    // Collect generously, then trim by family: a page's content usually sits
+    // below its navigation and filters, and cutting in document order alone
+    // would hand the planner thirty filter buttons and not one item.
+    const observed = (await page.evaluate(collectorScript(Math.max(maxElements, MAX_ELEMENTS), MAX_HEADINGS)));
+    observed.elements = trimByFamily(observed.elements, Math.max(maxElements, MAX_ELEMENTS));
     // The URL landed on, not the one asked for: app.example.com/ may redirect to
     // /auth/login, and the spec has to navigate to where it actually ended up.
     const landed = page.url() || url;
@@ -281,7 +325,9 @@ export async function observe(url, viewport = { width: 1280, height: 720 }) {
     const browser = await chromium.launch();
     try {
         const context = await browser.newContext({ viewport });
-        return await observeInPage(await context.newPage(), url, MAX_ELEMENTS);
+        const observed = await observeInPage(await context.newPage(), url, MAX_ELEMENTS);
+        observed.elements = trimByFamily(observed.elements, MAX_ELEMENTS);
+        return observed;
     }
     finally {
         await browser.close();
@@ -381,6 +427,16 @@ export async function observeSite(url, options = {}) {
                 // A page that will not load is simply not offered to the planner.
                 continue;
             }
+        }
+        // Navigation that is on every page is already known from the landing
+        // page; on the other pages it goes last, so each page's budget is spent
+        // on what is actually its own (the items, not the menu).
+        const chrome = new Set(landing.elements.map((e) => e.selector));
+        landing.elements = trimByFamily(landing.elements, perPage);
+        for (const p of pages.slice(1)) {
+            const own = p.elements.filter((e) => !chrome.has(e.selector));
+            const shared = p.elements.filter((e) => chrome.has(e.selector));
+            p.elements = trimByFamily([...own, ...shared], perPage);
         }
         return { origin, pages };
     }
