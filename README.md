@@ -214,6 +214,55 @@ watched them happen — selectors, order, the values you entered, and the pauses
 you took. The model only supplies words for steps it is told occurred; it never
 invents one. Use `--no-notes` to skip narration entirely.
 
+## Directing the planner with a brief
+
+Left to itself the planner guesses what matters. A brief tells it: what the
+product is, which features to show and in what order, the line you would say
+about each, the tone, and how long the demo should run.
+
+```yaml
+# brief.yaml
+product: Orbit tracks issues for small teams.
+tone: confident # or calm, playful
+seconds: 60
+features:
+  - name: Command palette
+    where: / # a path is visited by the observer; free text is a hint
+    say: Everything in Orbit is a keystroke away.
+  - name: Roadmap
+    where: /roadmap
+    say: Every project on one timeline.
+```
+
+```bash
+pnpm rollcut plan https://app.example.com --brief brief.yaml --out demos/app.yaml
+```
+
+The rules that keep a plan honest still apply: a feature the observer cannot
+find on the pages it visits is left out, not invented.
+
+## Recording behind a login
+
+Give the recorder a Playwright [storage state](https://playwright.dev/docs/auth)
+file and it starts from that session, so an app that needs an account opens
+already signed in. The sign-in happens in your own step, with the credentials in
+secrets, and is never on camera.
+
+```yaml
+- name: Sign in to the demo account
+  run: npx playwright codegen --save-storage=auth.json https://app.example.com/login
+  # or a short script: open the login page, fill the form, then
+  # context.storageState({ path: 'auth.json' })
+- uses: ArshadNyx/Rollcut@v1
+  with:
+    spec: demos/app.yaml
+    storage-state: auth.json
+```
+
+The CLI takes the same file: `rollcut record demos/app.yaml --storage-state auth.json`,
+and so does the planner, so it proposes a walkthrough of what members see rather
+than of the login page: `rollcut plan https://app.example.com --storage-state auth.json`.
+
 ## Planning a spec (experimental)
 
 Writing a spec by hand means hunting for selectors. `rollcut plan` proposes one
@@ -327,6 +376,7 @@ rollcut plan <url> [options]
   --readme <path>   (plan) Give the planner your README for context.
   --out <dir>       Output directory (default: out).
   --voice <name>    Provider-specific voice name.
+  --storage-state <file>  Start signed in, from a Playwright storage state file.
   --tts <name>      kokoro | edge (default: kokoro).
   --no-narration    Record silently.
   --no-subtitles    Narrate without burning subtitles (demo.srt is still written).

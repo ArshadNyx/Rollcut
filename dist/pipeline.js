@@ -45,6 +45,7 @@ export async function runPipeline(options) {
         workDir,
         url: options.url,
         narration,
+        storageState: options.storageState,
         onStep: (n, what) => log(`  step ${n}: ${what}`),
     });
     log('assembling…');

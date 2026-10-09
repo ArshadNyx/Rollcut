@@ -24,6 +24,8 @@ function isStructural(step: Step): boolean {
 
 export interface VerifyOptions {
   viewport?: { width: number; height: number };
+  /** Playwright storage state file, to replay as a signed-in user. */
+  storageState?: string;
   /** Overrides the spec's baseUrl, matching `record --url`. */
   url?: string;
   onStep?: (step: number, description: string, ok: boolean, reason?: string) => void;
@@ -46,7 +48,7 @@ export async function verify(spec: Spec, options: VerifyOptions = {}): Promise<V
 
   const browser = await chromium.launch();
   try {
-    const context = await browser.newContext({ viewport });
+    const context = await browser.newContext({ viewport, storageState: options.storageState });
     const page = await context.newPage();
     resetPointer();
 

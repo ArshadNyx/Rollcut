@@ -426,6 +426,10 @@ function navigationCandidates(
 
 export interface SiteOptions {
   viewport?: { width: number; height: number };
+  /** Playwright storage state file, to observe a site as a signed-in user. */
+  storageState?: string;
+  /** Paths to observe before crawling the navigation. */
+  include?: string[];
   /** Total pages to observe, landing page included. */
   maxPages?: number;
   /** Targets kept per page. Raise it for a dense app. */
@@ -451,7 +455,7 @@ export async function observeSite(
 
   const browser = await chromium.launch();
   try {
-    const context = await browser.newContext({ viewport });
+    const context = await browser.newContext({ viewport, storageState: options.storageState });
     const page = await context.newPage();
 
     // Fewer targets per page once there are several, so the prompt stays a
@@ -465,7 +469,8 @@ export async function observeSite(
     const origin = new URL(landing.url).origin;
     const pages: PageObservation[] = [landing];
 
-    for (const candidate of navigationCandidates(landing, origin, options.avoid)) {
+    const wanted = (options.include ?? []).map((p) => new URL(p, origin).href);
+    for (const candidate of [...wanted, ...navigationCandidates(landing, origin, options.avoid)]) {
       if (pages.length >= maxPages) break;
       try {
         const observed = await observeInPage(page, candidate, perPage);

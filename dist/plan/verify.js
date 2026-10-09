@@ -21,7 +21,7 @@ export async function verify(spec, options = {}) {
     const kept = [];
     const browser = await chromium.launch();
     try {
-        const context = await browser.newContext({ viewport });
+        const context = await browser.newContext({ viewport, storageState: options.storageState });
         const page = await context.newPage();
         resetPointer();
         for (const [i, step] of spec.steps.entries()) {

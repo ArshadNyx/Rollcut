@@ -16,6 +16,7 @@ rollcut repair <spec.yaml> [options]
   --tts <name>      TTS provider: ${Object.keys(PROVIDERS).join(' | ')} (default: ${DEFAULT_PROVIDER}).
   --no-narration    Record silently; skip TTS and subtitles.
   --no-subtitles    Narrate, but do not burn subtitles (demo.srt is still written).
+  --storage-state <file>  Start signed in, from a Playwright storage state file.
 
 Capture options:
   --readme <path>   Give the narrator your README for context.
@@ -31,9 +32,11 @@ Repair options:
 
 Plan options:
   --readme <path>   Give the planner your README for context.
+  --brief <path>    A YAML brief: what to show, in what order, in what tone (see README).
   --pages <n>       Pages to observe, landing page included (default: 4).
   --llm <name>      Planner backend: ${PLAN_PROVIDERS.join(' | ')} (default: ${DEFAULT_PLAN_PROVIDER}).
   --no-verify       Skip replaying the proposed spec in a browser.
+  --storage-state <file>  Observe and replay as a signed-in user.
   --out <file>      Write the proposed spec here instead of stdout.
 
 Examples:
@@ -46,9 +49,11 @@ interface Args {
   spec: string | undefined;
   url?: string;
   voice?: string;
+  storageState?: string;
   tts: string;
   out: string;
   readme?: string;
+  brief?: string;
   planOut?: string;
   llm: string;
   pages?: number;
@@ -108,8 +113,10 @@ function parseArgs(argv: string[]): Args {
       args.out = value;
       args.planOut = value;
     } else if (flag === '--voice') args.voice = value;
+    else if (flag === '--storage-state') args.storageState = value;
     else if (flag === '--tts') args.tts = value;
     else if (flag === '--readme') args.readme = value;
+    else if (flag === '--brief') args.brief = value;
     else if (flag === '--llm') args.llm = value;
     else if (flag === '--pages') args.pages = Number(value);
     else throw new Error(`Unknown flag ${flag}.\n\n${USAGE}`);
@@ -130,12 +137,15 @@ async function runPlan(args: Args): Promise<void> {
   }
 
   const readme = args.readme ? await readFile(args.readme, 'utf8') : undefined;
+  const brief = args.brief ? await loadBrief(args.brief) : undefined;
   const result = await plan({
     url,
     readme,
+    brief,
     provider: await loadPlanProvider(args.llm),
     maxPages: args.pages,
     verify: args.verify,
+    storageState: args.storageState,
     log: (m) => console.error(m),
   });
 
@@ -304,6 +314,7 @@ async function main(): Promise<void> {
     tts: args.tts,
     narration: args.narration,
     subtitles: args.subtitles,
+    storageState: args.storageState,
     log: (m) => console.log(m),
   });
 
@@ -323,3 +334,27 @@ main().catch((err: Error) => {
   console.error(`\nrollcut: ${err.message}`);
   process.exit(1);
 });
+
+/** A brief file is YAML; only the known fields are passed on. */
+async function loadBrief(path: string) {
+  const yaml = (await import('js-yaml')).default;
+  const raw = yaml.load(await readFile(path, 'utf8')) as Record<string, unknown> | null;
+  if (!raw || typeof raw !== 'object')
+    throw new Error(`The brief at ${path} is not a YAML mapping.`);
+  const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  const features = Array.isArray(raw.features)
+    ? raw.features
+        .filter(
+          (f) => f && typeof f === 'object' && typeof (f as { name?: unknown }).name === 'string',
+        )
+        .map((f) => {
+          const o = f as Record<string, unknown>;
+          return { name: o.name as string, where: str(o.where), say: str(o.say) };
+        })
+    : undefined;
+  const tone = ['confident', 'calm', 'playful'].includes(raw.tone as string)
+    ? (raw.tone as 'confident' | 'calm' | 'playful')
+    : undefined;
+  const seconds = typeof raw.seconds === 'number' && raw.seconds > 0 ? raw.seconds : undefined;
+  return { product: str(raw.product), features, tone, seconds };
+}

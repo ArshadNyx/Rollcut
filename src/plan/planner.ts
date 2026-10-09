@@ -125,14 +125,83 @@ const STEP_SCHEMA: Record<string, unknown> = {
   },
 };
 
-export const PLAN_SCHEMA: Record<string, unknown> = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['steps'],
-  properties: {
-    steps: { type: 'array', minItems: 3, maxItems: DEFAULT_MAX_STEPS, items: STEP_SCHEMA },
-  },
+export const PLAN_SCHEMA: Record<string, unknown> = planSchema(DEFAULT_MAX_STEPS);
+
+function planSchema(maxSteps: number): Record<string, unknown> {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['steps'],
+    properties: {
+      steps: { type: 'array', minItems: 3, maxItems: maxSteps, items: STEP_SCHEMA },
+    },
+  };
+}
+
+/**
+ * What the person wants shown, so the planner directs rather than guesses.
+ * Every field is optional; an empty brief is the same as none.
+ */
+export interface Brief {
+  /** One line on what the product is. Opens the narration. */
+  product?: string;
+  /** The features to show, in this order. */
+  features?: {
+    name: string;
+    /** Where it lives: a path, or how to reach it. Paths are visited by the observer. */
+    where?: string;
+    /** The one sentence to say about it, in the person's words. */
+    say?: string;
+  }[];
+  tone?: 'confident' | 'calm' | 'playful';
+  /** Target running time; sets the step budget. */
+  seconds?: number;
+}
+
+/** About four seconds a step: a pause plus a spoken sentence on half of them. */
+export function stepBudget(brief?: Brief): number {
+  if (!brief?.seconds) return DEFAULT_MAX_STEPS;
+  return Math.max(6, Math.min(40, Math.round(brief.seconds / 4)));
+}
+
+const TONES: Record<NonNullable<Brief['tone']>, string> = {
+  confident: 'confident and direct, like a founder who is proud of this',
+  calm: 'calm and unhurried, like a good onboarding guide',
+  playful: 'light and friendly, with an occasional smile in the wording',
 };
+
+function briefRules(brief: Brief, maxSteps: number): string {
+  const parts: string[] = [
+    '',
+    'The person who owns this product wrote a brief. It decides what the demo is about:',
+  ];
+  if (brief.product?.trim())
+    parts.push(
+      `- The product, in their words: "${brief.product.trim()}". The first note says this, or something very close.`,
+    );
+  if (brief.features?.length) {
+    parts.push(
+      '- Show these features, in this order, two to five steps each. Do not add features they did not ask for:',
+    );
+    brief.features.forEach((f, i) => {
+      const where = f.where?.trim() ? ` (where: ${f.where.trim()})` : '';
+      const say = f.say?.trim() ? ` — their line for it: "${f.say.trim()}"` : '';
+      parts.push(`  ${i + 1}. ${f.name.trim()}${where}${say}`);
+    });
+    parts.push(
+      '- Each feature begins with a step that carries a note. Where they gave a line, use it as that note, lightly reworded if it must be spoken.',
+    );
+    parts.push(
+      '- If a feature cannot be found on the pages listed, leave it out rather than inventing it.',
+    );
+  }
+  if (brief.tone) parts.push(`- Tone of the notes: ${TONES[brief.tone]}.`);
+  if (brief.seconds)
+    parts.push(
+      `- Target length about ${brief.seconds} seconds, so about ${maxSteps} steps in all.`,
+    );
+  return parts.join('\n');
+}
 
 const SYSTEM = `You plan short product demo videos.
 
@@ -408,6 +477,10 @@ export interface PlanOptions {
   site?: SiteObservation;
   /** Replay the proposed spec and drop steps that fail. Default true. */
   verify?: boolean;
+  /** Playwright storage state file: observe and replay as a signed-in user. */
+  storageState?: string;
+  /** What to show and how to say it. */
+  brief?: Brief;
   log?: (message: string) => void;
 }
 
@@ -419,9 +492,15 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
   let site = options.site;
   if (!site) {
     log(`observing ${options.url}…`);
+    // Paths the brief points at are observed first, so the features it names can be found.
+    const named = (options.brief?.features ?? [])
+      .map((f) => f.where?.trim() ?? '')
+      .filter((w) => w.startsWith('/'));
     site = await observeSite(options.url, {
       viewport,
-      maxPages: options.maxPages,
+      storageState: options.storageState,
+      include: named,
+      maxPages: Math.max(options.maxPages ?? 4, named.length + 1),
       onPage: (path, count) => log(`  ${path} — ${count} targets`),
     });
   }
@@ -435,11 +514,21 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
 
   log(`planning with ${options.provider.name}…`);
   const landing = site.pages[0]!;
+  const maxSteps = stepBudget(options.brief);
+  const hasBrief = !!(
+    options.brief?.product ||
+    options.brief?.features?.length ||
+    options.brief?.tone ||
+    options.brief?.seconds
+  );
+  const system =
+    (landing.canvas ? SYSTEM + canvasRules(landing.canvas) : SYSTEM) +
+    (hasBrief ? briefRules(options.brief!, maxSteps) : '');
   const proposed = await options.provider.propose({
-    system: landing.canvas ? SYSTEM + canvasRules(landing.canvas) : SYSTEM,
+    system,
     user: describe(site, options.readme),
-    schema: PLAN_SCHEMA,
-    maxSteps: DEFAULT_MAX_STEPS,
+    schema: planSchema(maxSteps),
+    maxSteps,
   });
 
   const steps = (proposed as { steps?: PlannedStep[] }).steps;
@@ -468,6 +557,7 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
     log('verifying the plan in a browser…');
     const result = await verify(final, {
       viewport,
+      storageState: options.storageState,
       onStep: (n, kind, ok, reason) =>
         log(`  step ${n}: ${kind} ${ok ? 'ok' : `failed — ${reason}`}`),
     });

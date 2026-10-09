@@ -40,6 +40,14 @@ inputs:
   voice:
     description: Voice name. Provider-specific — kokoro uses names like af_heart.
     required: false
+  storage-state:
+    description: >-
+      Path to a Playwright storage state file (cookies and local storage). The
+      recording starts from it, so an app behind a login opens already signed
+      in and the sign-in itself is never on camera. Produce the file in an
+      earlier step, for example with a short Playwright script, and keep the
+      credentials in secrets.
+    required: false
   tts:
     description: TTS provider — kokoro (local, default) or edge (unofficial Microsoft endpoint).
     required: false
@@ -157,6 +165,7 @@ runs:
         INPUT_ATTACH-TO-RELEASE: ${{ inputs.attach-to-release }}
         INPUT_UPDATE-README: ${{ inputs.update-readme }}
         INPUT_VOICE: ${{ inputs.voice }}
+        INPUT_STORAGE-STATE: ${{ inputs.storage-state }}
         INPUT_TTS: ${{ inputs.tts }}
         INPUT_NARRATION: ${{ inputs.narration }}
         INPUT_SUBTITLES: ${{ inputs.subtitles }}

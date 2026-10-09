@@ -353,7 +353,7 @@ export async function observeSite(url, options = {}) {
     const maxPages = Math.max(1, options.maxPages ?? 4);
     const browser = await chromium.launch();
     try {
-        const context = await browser.newContext({ viewport });
+        const context = await browser.newContext({ viewport, storageState: options.storageState });
         const page = await context.newPage();
         // Fewer targets per page once there are several, so the prompt stays a
         // sensible size as pages are added.
@@ -363,7 +363,8 @@ export async function observeSite(url, options = {}) {
         options.onPage?.(landing.path, landing.elements.length);
         const origin = new URL(landing.url).origin;
         const pages = [landing];
-        for (const candidate of navigationCandidates(landing, origin, options.avoid)) {
+        const wanted = (options.include ?? []).map((p) => new URL(p, origin).href);
+        for (const candidate of [...wanted, ...navigationCandidates(landing, origin, options.avoid)]) {
             if (pages.length >= maxPages)
                 break;
             try {
