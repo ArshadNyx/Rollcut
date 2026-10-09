@@ -16,6 +16,12 @@ export interface RecordOptions {
   url?: string;
   /** Pre-measured narration, keyed by step index. Empty for a silent run. */
   narration?: Map<number, Narration>;
+  /**
+   * A Playwright storage state file (cookies and local storage) to start
+   * from, so the recording opens already signed in. The sign-in itself
+   * happens elsewhere and is never on camera.
+   */
+  storageState?: string;
   onStep?: (index: number, description: string) => void;
 }
 
@@ -53,6 +59,7 @@ export async function record(spec: Spec, options: RecordOptions): Promise<Record
       dir: videoDir,
       size: { width: spec.viewport.width * spec.scale, height: spec.viewport.height * spec.scale },
     },
+    storageState: options.storageState,
   });
   const page = await context.newPage();
   // Recording is running from here on; every cue is measured against this.

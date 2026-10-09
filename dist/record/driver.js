@@ -27,6 +27,7 @@ export async function record(spec, options) {
             dir: videoDir,
             size: { width: spec.viewport.width * spec.scale, height: spec.viewport.height * spec.scale },
         },
+        storageState: options.storageState,
     });
     const page = await context.newPage();
     // Recording is running from here on; every cue is measured against this.

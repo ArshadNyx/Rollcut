@@ -15,6 +15,7 @@ rollcut repair <spec.yaml> [options]
   --tts <name>      TTS provider: ${Object.keys(PROVIDERS).join(' | ')} (default: ${DEFAULT_PROVIDER}).
   --no-narration    Record silently; skip TTS and subtitles.
   --no-subtitles    Narrate, but do not burn subtitles (demo.srt is still written).
+  --storage-state <file>  Start signed in, from a Playwright storage state file.
 
 Capture options:
   --readme <path>   Give the narrator your README for context.
@@ -91,6 +92,8 @@ function parseArgs(argv) {
         }
         else if (flag === '--voice')
             args.voice = value;
+        else if (flag === '--storage-state')
+            args.storageState = value;
         else if (flag === '--tts')
             args.tts = value;
         else if (flag === '--readme')
@@ -258,6 +261,7 @@ async function main() {
         tts: args.tts,
         narration: args.narration,
         subtitles: args.subtitles,
+        storageState: args.storageState,
         log: (m) => console.log(m),
     });
     const [m, g] = await Promise.all([stat(result.mp4), stat(result.gif)]);

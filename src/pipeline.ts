@@ -24,6 +24,8 @@ export interface PipelineOptions {
   tts?: string;
   narration?: boolean;
   subtitles?: boolean;
+  /** Start the browser from this Playwright storage state file (record behind a login). */
+  storageState?: string;
   log?: (message: string) => void;
 }
 
@@ -78,6 +80,7 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRes
     workDir,
     url: options.url,
     narration,
+    storageState: options.storageState,
     onStep: (n, what) => log(`  step ${n}: ${what}`),
   });
 

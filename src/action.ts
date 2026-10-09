@@ -16,6 +16,7 @@ async function main(): Promise<void> {
   const spec = core.getInput('spec', { required: true });
   const url = core.getInput('url') || undefined;
   const voice = core.getInput('voice') || undefined;
+  const storageState = core.getInput('storage-state') || undefined;
   const tts = core.getInput('tts') || undefined;
   const outDir = core.getInput('out') || 'out';
   const attach = boolInput('attach-to-release', true);
@@ -30,6 +31,7 @@ async function main(): Promise<void> {
     tts,
     narration: boolInput('narration', true),
     subtitles: boolInput('subtitles', true),
+    storageState,
     log: (m) => core.info(m),
   });
 

@@ -214,6 +214,26 @@ watched them happen — selectors, order, the values you entered, and the pauses
 you took. The model only supplies words for steps it is told occurred; it never
 invents one. Use `--no-notes` to skip narration entirely.
 
+## Recording behind a login
+
+Give the recorder a Playwright [storage state](https://playwright.dev/docs/auth)
+file and it starts from that session, so an app that needs an account opens
+already signed in. The sign-in happens in your own step, with the credentials in
+secrets, and is never on camera.
+
+```yaml
+- name: Sign in to the demo account
+  run: npx playwright codegen --save-storage=auth.json https://app.example.com/login
+  # or a short script: open the login page, fill the form, then
+  # context.storageState({ path: 'auth.json' })
+- uses: ArshadNyx/Rollcut@v1
+  with:
+    spec: demos/app.yaml
+    storage-state: auth.json
+```
+
+The CLI takes the same file: `rollcut record demos/app.yaml --storage-state auth.json`.
+
 ## Planning a spec (experimental)
 
 Writing a spec by hand means hunting for selectors. `rollcut plan` proposes one
@@ -327,6 +347,7 @@ rollcut plan <url> [options]
   --readme <path>   (plan) Give the planner your README for context.
   --out <dir>       Output directory (default: out).
   --voice <name>    Provider-specific voice name.
+  --storage-state <file>  Start signed in, from a Playwright storage state file.
   --tts <name>      kokoro | edge (default: kokoro).
   --no-narration    Record silently.
   --no-subtitles    Narrate without burning subtitles (demo.srt is still written).
