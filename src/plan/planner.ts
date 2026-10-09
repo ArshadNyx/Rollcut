@@ -194,6 +194,9 @@ function briefRules(brief: Brief, maxSteps: number): string {
     parts.push(
       '- If a feature cannot be found on the pages listed, leave it out rather than inventing it.',
     );
+    parts.push(
+      '- To open an item from a list (a model, a product, an issue, a document), click one of the links to a deeper page, such as a[href="/name/item"]; filters and sort buttons are not the item.',
+    );
   }
   if (brief.tone) parts.push(`- Tone of the notes: ${TONES[brief.tone]}.`);
   if (brief.seconds)
@@ -495,7 +498,7 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
     // Paths the brief points at are observed first, so the features it names can be found.
     const named = (options.brief?.features ?? [])
       .map((f) => f.where?.trim() ?? '')
-      .filter((w) => w.startsWith('/'));
+      .filter((w) => /^\/[^\s,]*$/.test(w));
     site = await observeSite(options.url, {
       viewport,
       storageState: options.storageState,
