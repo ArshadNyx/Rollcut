@@ -334,6 +334,7 @@ export async function plan(options) {
         log(`observing ${options.url}…`);
         site = await observeSite(options.url, {
             viewport,
+            storageState: options.storageState,
             maxPages: options.maxPages,
             onPage: (path, count) => log(`  ${path} — ${count} targets`),
         });
@@ -370,6 +371,7 @@ export async function plan(options) {
         log('verifying the plan in a browser…');
         const result = await verify(final, {
             viewport,
+            storageState: options.storageState,
             onStep: (n, kind, ok, reason) => log(`  step ${n}: ${kind} ${ok ? 'ok' : `failed — ${reason}`}`),
         });
         final = result.spec;

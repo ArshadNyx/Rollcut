@@ -35,6 +35,7 @@ Plan options:
   --pages <n>       Pages to observe, landing page included (default: 4).
   --llm <name>      Planner backend: ${PLAN_PROVIDERS.join(' | ')} (default: ${DEFAULT_PLAN_PROVIDER}).
   --no-verify       Skip replaying the proposed spec in a browser.
+  --storage-state <file>  Observe and replay as a signed-in user.
   --out <file>      Write the proposed spec here instead of stdout.
 
 Examples:
@@ -139,6 +140,7 @@ async function runPlan(args: Args): Promise<void> {
     provider: await loadPlanProvider(args.llm),
     maxPages: args.pages,
     verify: args.verify,
+    storageState: args.storageState,
     log: (m) => console.error(m),
   });
 

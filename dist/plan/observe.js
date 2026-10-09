@@ -353,7 +353,7 @@ export async function observeSite(url, options = {}) {
     const maxPages = Math.max(1, options.maxPages ?? 4);
     const browser = await chromium.launch();
     try {
-        const context = await browser.newContext({ viewport });
+        const context = await browser.newContext({ viewport, storageState: options.storageState });
         const page = await context.newPage();
         // Fewer targets per page once there are several, so the prompt stays a
         // sensible size as pages are added.

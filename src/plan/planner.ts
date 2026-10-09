@@ -408,6 +408,8 @@ export interface PlanOptions {
   site?: SiteObservation;
   /** Replay the proposed spec and drop steps that fail. Default true. */
   verify?: boolean;
+  /** Playwright storage state file: observe and replay as a signed-in user. */
+  storageState?: string;
   log?: (message: string) => void;
 }
 
@@ -421,6 +423,7 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
     log(`observing ${options.url}…`);
     site = await observeSite(options.url, {
       viewport,
+      storageState: options.storageState,
       maxPages: options.maxPages,
       onPage: (path, count) => log(`  ${path} — ${count} targets`),
     });
@@ -468,6 +471,7 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
     log('verifying the plan in a browser…');
     const result = await verify(final, {
       viewport,
+      storageState: options.storageState,
       onStep: (n, kind, ok, reason) =>
         log(`  step ${n}: ${kind} ${ok ? 'ok' : `failed — ${reason}`}`),
     });

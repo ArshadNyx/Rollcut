@@ -232,7 +232,9 @@ secrets, and is never on camera.
     storage-state: auth.json
 ```
 
-The CLI takes the same file: `rollcut record demos/app.yaml --storage-state auth.json`.
+The CLI takes the same file: `rollcut record demos/app.yaml --storage-state auth.json`,
+and so does the planner, so it proposes a walkthrough of what members see rather
+than of the login page: `rollcut plan https://app.example.com --storage-state auth.json`.
 
 ## Planning a spec (experimental)
 
