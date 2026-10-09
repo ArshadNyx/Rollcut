@@ -363,7 +363,8 @@ export async function observeSite(url, options = {}) {
         options.onPage?.(landing.path, landing.elements.length);
         const origin = new URL(landing.url).origin;
         const pages = [landing];
-        for (const candidate of navigationCandidates(landing, origin, options.avoid)) {
+        const wanted = (options.include ?? []).map((p) => new URL(p, origin).href);
+        for (const candidate of [...wanted, ...navigationCandidates(landing, origin, options.avoid)]) {
             if (pages.length >= maxPages)
                 break;
             try {

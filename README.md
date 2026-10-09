@@ -214,6 +214,33 @@ watched them happen — selectors, order, the values you entered, and the pauses
 you took. The model only supplies words for steps it is told occurred; it never
 invents one. Use `--no-notes` to skip narration entirely.
 
+## Directing the planner with a brief
+
+Left to itself the planner guesses what matters. A brief tells it: what the
+product is, which features to show and in what order, the line you would say
+about each, the tone, and how long the demo should run.
+
+```yaml
+# brief.yaml
+product: Orbit tracks issues for small teams.
+tone: confident # or calm, playful
+seconds: 60
+features:
+  - name: Command palette
+    where: / # a path is visited by the observer; free text is a hint
+    say: Everything in Orbit is a keystroke away.
+  - name: Roadmap
+    where: /roadmap
+    say: Every project on one timeline.
+```
+
+```bash
+pnpm rollcut plan https://app.example.com --brief brief.yaml --out demos/app.yaml
+```
+
+The rules that keep a plan honest still apply: a feature the observer cannot
+find on the pages it visits is left out, not invented.
+
 ## Recording behind a login
 
 Give the recorder a Playwright [storage state](https://playwright.dev/docs/auth)
