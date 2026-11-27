@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test';
+import { launchBrowser } from '../record/browser.js';
 import { normalisePath, selectorHelpersScript } from './observe.js';
 /** The floating bar and the listeners that report what the person does. */
 export function recorderScript() {
@@ -159,7 +159,7 @@ export function recorderScript() {
  */
 export async function capture(options) {
     const viewport = options.viewport ?? { width: 1280, height: 720 };
-    const browser = await chromium.launch({ headless: false, args: ['--hide-scrollbars'] });
+    const browser = await launchBrowser({ headless: false, args: ['--hide-scrollbars'] });
     const context = await browser.newContext({ viewport });
     const page = await context.newPage();
     const started = Date.now();

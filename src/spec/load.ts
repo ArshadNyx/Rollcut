@@ -4,6 +4,8 @@ import yaml from 'js-yaml';
 import { ZodError } from 'zod';
 import { specSchema, type Spec } from './schema.js';
 
+export const MAX_SPEC_BYTES = 256 * 1024;
+
 /** Turn a zod issue path into something a human can find in the YAML. */
 function locate(path: (string | number)[]): string {
   if (path.length === 0) return 'the spec root';
@@ -36,6 +38,13 @@ export async function loadSpec(path: string): Promise<Spec> {
   } catch {
     throw new Error(
       `Cannot read spec \`${path}\` — check the path. Example: rollcut record demos/excalidraw.yaml`,
+    );
+  }
+
+  // Specs are a few KB; a cap keeps a hostile one from tying up the parser.
+  if (Buffer.byteLength(raw) > MAX_SPEC_BYTES) {
+    throw new Error(
+      `${path} is ${Math.round(Buffer.byteLength(raw) / 1024)} KB; a spec can be at most ${MAX_SPEC_BYTES / 1024} KB.`,
     );
   }
 

@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test';
+import { launchBrowser } from '../record/browser.js';
 import { normalisePath, selectorHelpersScript } from './observe.js';
 
 /** One thing the person did, in the order they did it. */
@@ -184,7 +184,7 @@ export interface CaptureOptions {
  */
 export async function capture(options: CaptureOptions): Promise<CaptureResult> {
   const viewport = options.viewport ?? { width: 1280, height: 720 };
-  const browser = await chromium.launch({ headless: false, args: ['--hide-scrollbars'] });
+  const browser = await launchBrowser({ headless: false, args: ['--hide-scrollbars'] });
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
 

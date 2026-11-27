@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test';
+import { launchBrowser } from '../record/browser.js';
 /** Enough to plan a walkthrough; few enough to keep the prompt affordable. */
 const MAX_ELEMENTS = 90;
 const MAX_HEADINGS = 20;
@@ -322,7 +322,7 @@ async function observeInPage(page, url, maxElements) {
 }
 /** Open one page and describe what a demo could interact with. */
 export async function observe(url, viewport = { width: 1280, height: 720 }) {
-    const browser = await chromium.launch();
+    const browser = await launchBrowser();
     try {
         const context = await browser.newContext({ viewport });
         const observed = await observeInPage(await context.newPage(), url, MAX_ELEMENTS);
@@ -397,7 +397,7 @@ function navigationCandidates(landing, origin, avoid = DEFAULT_AVOID) {
 export async function observeSite(url, options = {}) {
     const viewport = options.viewport ?? { width: 1280, height: 720 };
     const maxPages = Math.max(1, options.maxPages ?? 4);
-    const browser = await chromium.launch();
+    const browser = await launchBrowser();
     try {
         const context = await browser.newContext({ viewport, storageState: options.storageState });
         const page = await context.newPage();

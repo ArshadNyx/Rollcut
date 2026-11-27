@@ -1,4 +1,5 @@
-import { chromium, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { launchBrowser } from '../record/browser.js';
 
 /** One thing on the page a step could plausibly act on. */
 export interface PageTarget {
@@ -396,7 +397,7 @@ export async function observe(
   url: string,
   viewport: { width: number; height: number } = { width: 1280, height: 720 },
 ): Promise<PageObservation> {
-  const browser = await chromium.launch();
+  const browser = await launchBrowser();
   try {
     const context = await browser.newContext({ viewport });
     const observed = await observeInPage(await context.newPage(), url, MAX_ELEMENTS);
@@ -497,7 +498,7 @@ export async function observeSite(
   const viewport = options.viewport ?? { width: 1280, height: 720 };
   const maxPages = Math.max(1, options.maxPages ?? 4);
 
-  const browser = await chromium.launch();
+  const browser = await launchBrowser();
   try {
     const context = await browser.newContext({ viewport, storageState: options.storageState });
     const page = await context.newPage();

@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test';
+import { launchBrowser } from '../record/browser.js';
 import { specSchema, stepKind, type Spec, type Step } from '../spec/schema.js';
 import { executeStep, resetPointer, wait } from '../record/steps.js';
 
@@ -46,7 +46,7 @@ export async function verify(spec: Spec, options: VerifyOptions = {}): Promise<V
   const failures: StepFailure[] = [];
   const kept: Step[] = [];
 
-  const browser = await chromium.launch();
+  const browser = await launchBrowser();
   try {
     const context = await browser.newContext({ viewport, storageState: options.storageState });
     const page = await context.newPage();

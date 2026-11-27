@@ -1,8 +1,22 @@
 import { z } from 'zod';
 const point = z.tuple([z.number(), z.number()]);
 const withNote = { note: z.string().optional() };
+// Where the browser may be sent: a path on the site (/pricing) or an http(s)
+// address. A spec is often written by someone else (a teammate, a planner, a
+// customer), so file:, data:, javascript: and the like are refused outright.
+const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
+export function isWebTarget(target) {
+    const t = target.trim();
+    const scheme = SCHEME.exec(t)?.[1]?.toLowerCase();
+    if (!scheme)
+        return t.length > 0;
+    return scheme === 'http' || scheme === 'https';
+}
+const target = z
+    .string()
+    .refine(isWebTarget, { message: 'must be a path like /pricing or an http(s) address' });
 export const stepSchema = z.union([
-    z.object({ navigate: z.string(), ...withNote }).strict(),
+    z.object({ navigate: target, ...withNote }).strict(),
     z.object({ click: z.string(), ...withNote }).strict(),
     z.object({ clickAt: point, ...withNote }).strict(),
     z.object({ drag: z.object({ from: point, to: point }).strict(), ...withNote }).strict(),
@@ -16,7 +30,10 @@ export const stepSchema = z.union([
 ]);
 export const specSchema = z
     .object({
-    baseUrl: z.string().url(),
+    baseUrl: z
+        .string()
+        .url()
+        .refine((u) => /^https?:\/\//i.test(u), { message: 'must be an http(s) address' }),
     viewport: z
         .object({ width: z.number().int().positive(), height: z.number().int().positive() })
         .strict()
