@@ -291,6 +291,9 @@ async function runRepair(args: Args): Promise<void> {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  if (process.env.ROLLCUT_PUBLIC_ONLY === '1' && args.url && !/^https?:\/\//i.test(args.url)) {
+    throw new Error(`--url ${args.url}: public-only mode opens http(s) addresses only.`);
+  }
 
   if (args.command === 'repair') {
     await runRepair(args);

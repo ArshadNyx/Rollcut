@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { relative } from 'node:path';
 import yaml from 'js-yaml';
 import { ZodError } from 'zod';
-import { specSchema, type Spec } from './schema.js';
+import { isWebTarget, specSchema, type Spec } from './schema.js';
 
 export const MAX_SPEC_BYTES = 256 * 1024;
 
@@ -29,6 +29,15 @@ function explain(err: ZodError, file: string): string {
     return `  - ${at}: ${issue.message}`;
   });
   return `${file} is not a valid Rollcut spec:\n${lines.join('\n')}`;
+}
+
+/** Public-only mode: the browser opens web addresses only, never a local file. */
+export function checkPublicOnly(spec: Spec, path: string) {
+  const bad = [
+    spec.baseUrl,
+    ...spec.steps.flatMap((s) => ('navigate' in s ? [s.navigate] : [])),
+  ].find((t) => !isWebTarget(t, false));
+  if (bad) throw new Error(`${path}: public-only mode opens web addresses only, not ${bad}`);
 }
 
 export async function loadSpec(path: string): Promise<Spec> {
@@ -59,5 +68,6 @@ export async function loadSpec(path: string): Promise<Spec> {
   if (!parsed.success) {
     throw new Error(explain(parsed.error, relative(process.cwd(), path) || path));
   }
+  if (process.env.ROLLCUT_PUBLIC_ONLY === '1') checkPublicOnly(parsed.data, path);
   return parsed.data;
 }

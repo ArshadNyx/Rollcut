@@ -9,17 +9,19 @@ import {
 import { isWebTarget } from '../src/spec/schema.js';
 
 describe('navigate targets', () => {
-  it('allows paths and http(s) addresses only', () => {
+  it('allows paths, http(s) and file: addresses', () => {
     for (const ok of [
       '/',
       '/pricing?x=1',
       'https://example.com',
       'http://example.com/a',
       'pricing',
+      'file:///tmp/page.html',
     ])
       expect(isWebTarget(ok), ok).toBe(true);
+  });
+  it('refuses schemes that run code or open browser internals', () => {
     for (const bad of [
-      'file:///etc/passwd',
       'javascript:alert(1)',
       'data:text/html,hi',
       'chrome://settings',
@@ -27,6 +29,10 @@ describe('navigate targets', () => {
       '',
     ])
       expect(isWebTarget(bad), bad).toBe(false);
+  });
+  it('refuses file: in public-only mode', () => {
+    expect(isWebTarget('file:///proc/self/environ', false)).toBe(false);
+    expect(isWebTarget('https://example.com', false)).toBe(true);
   });
 });
 
