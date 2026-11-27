@@ -122,6 +122,10 @@ runs:
     - name: Install Rollcut dependencies
       shell: bash
       working-directory: ${{ github.action_path }}
+      # onnxruntime-node's install fetches CUDA binaries on Linux; that download
+      # now 404s, and pnpm then silently drops kokoro-js (the voice). No GPU here.
+      env:
+        ONNXRUNTIME_NODE_INSTALL_CUDA: skip
       run: |
         corepack enable
         pnpm install --prod --frozen-lockfile
