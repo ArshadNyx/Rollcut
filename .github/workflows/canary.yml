@@ -44,6 +44,10 @@ jobs:
           restore-keys: |
             rollcut-${{ runner.os }}-
       - name: Install
+        # onnxruntime-node's install fetches CUDA binaries on Linux; that download
+        # now 404s, and pnpm then silently drops kokoro-js (the voice). No GPU here.
+        env:
+          ONNXRUNTIME_NODE_INSTALL_CUDA: skip
         run: |
           corepack enable
           pnpm install --frozen-lockfile

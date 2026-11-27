@@ -1,4 +1,4 @@
-import { stat, writeFile } from 'node:fs/promises';
+import { rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ffmpeg } from './ffmpeg.js';
 import { DEFAULT_STYLE, toAss, toSrt } from './subtitles.js';
@@ -68,12 +68,44 @@ export async function toMp4(raw, outPath, options) {
     await ffmpeg(args);
     return cues.length > 0;
 }
-/** Palette-based GIF so gradients and UI chrome do not band. The GIF is silent. */
+/**
+ * Palette-based GIF so gradients and UI chrome do not band. The GIF is silent.
+ *
+ * Two passes: the palette is written to a file first, then applied while the
+ * frames stream through. In one graph, paletteuse must hold every frame until
+ * palettegen has seen the last one, which on a long 2x capture runs to
+ * gigabytes.
+ */
 export async function toGif(raw, outPath, zoom) {
-    const filters = `${zoom ? `${zoom},` : ''}fps=${GIF_FPS},scale=${GIF_WIDTH}:-1:flags=lanczos,split[s0][s1];` +
-        `[s0]palettegen=max_colors=192:stats_mode=diff[p];` +
-        `[s1][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`;
-    await ffmpeg(['-i', raw, '-filter_complex', filters, '-loop', '0', outPath]);
+    const frames = `${zoom ? `${zoom},` : ''}fps=${GIF_FPS},scale=${GIF_WIDTH}:-1:flags=lanczos`;
+    const palette = `${outPath}.palette.png`;
+    try {
+        await ffmpeg([
+            '-i',
+            raw,
+            '-vf',
+            `${frames},palettegen=max_colors=192:stats_mode=diff`,
+            '-update',
+            '1',
+            '-frames:v',
+            '1',
+            palette,
+        ]);
+        await ffmpeg([
+            '-i',
+            raw,
+            '-i',
+            palette,
+            '-filter_complex',
+            `[0:v]${frames}[f];[f][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`,
+            '-loop',
+            '0',
+            outPath,
+        ]);
+    }
+    finally {
+        await rm(palette, { force: true });
+    }
     return outPath;
 }
 /**
