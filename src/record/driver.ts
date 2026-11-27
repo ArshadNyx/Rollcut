@@ -1,6 +1,6 @@
 import { mkdir, rename, readdir } from 'node:fs/promises';
+import { launchBrowser } from './browser.js';
 import { join } from 'node:path';
-import { chromium } from '@playwright/test';
 import type { Spec, Step } from '../spec/schema.js';
 import { stepKind } from '../spec/schema.js';
 import { ensureCursor, installCursor } from './cursor.js';
@@ -49,7 +49,7 @@ export async function record(spec: Spec, options: RecordOptions): Promise<Record
   const videoDir = join(options.workDir, 'raw');
   await mkdir(videoDir, { recursive: true });
 
-  const browser = await chromium.launch({
+  const browser = await launchBrowser({
     args: [`--force-device-scale-factor=${spec.scale}`, '--hide-scrollbars'],
   });
   const context = await browser.newContext({

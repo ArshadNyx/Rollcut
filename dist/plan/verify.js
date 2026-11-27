@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test';
+import { launchBrowser } from '../record/browser.js';
 import { specSchema, stepKind } from '../spec/schema.js';
 import { executeStep, resetPointer, wait } from '../record/steps.js';
 /** A step that cannot be skipped without invalidating everything after it. */
@@ -19,7 +19,7 @@ export async function verify(spec, options = {}) {
     const baseUrl = options.url ?? spec.baseUrl;
     const failures = [];
     const kept = [];
-    const browser = await chromium.launch();
+    const browser = await launchBrowser();
     try {
         const context = await browser.newContext({ viewport, storageState: options.storageState });
         const page = await context.newPage();

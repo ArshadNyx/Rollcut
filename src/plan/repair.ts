@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test';
+import { launchBrowser } from '../record/browser.js';
 import { specSchema, stepKind, type Spec, type Step } from '../spec/schema.js';
 import { executeStep, resetPointer, wait } from '../record/steps.js';
 import { collectTargets, type PageTarget } from './observe.js';
@@ -201,7 +201,7 @@ export async function repair(spec: Spec, options: RepairOptions = {}): Promise<R
   const unrepaired: RepairResult['unrepaired'] = [];
   const steps: Step[] = [];
 
-  const browser = await chromium.launch();
+  const browser = await launchBrowser();
   try {
     const context = await browser.newContext({ viewport });
     const page = await context.newPage();

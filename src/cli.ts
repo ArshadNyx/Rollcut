@@ -16,6 +16,8 @@ rollcut repair <spec.yaml> [options]
   --tts <name>      TTS provider: ${Object.keys(PROVIDERS).join(' | ')} (default: ${DEFAULT_PROVIDER}).
   --no-narration    Record silently; skip TTS and subtitles.
   --no-subtitles    Narrate, but do not burn subtitles (demo.srt is still written).
+  --public-only     Refuse local and private addresses (also ROLLCUT_PUBLIC_ONLY=1).
+                    For recording sites on someone else's behalf.
   --storage-state <file>  Start signed in, from a Playwright storage state file.
 
 Capture options:
@@ -104,6 +106,11 @@ function parseArgs(argv: string[]): Args {
     }
     if (flag === '--no-subtitles') {
       args.subtitles = false;
+      continue;
+    }
+    if (flag === '--public-only') {
+      // Read by every browser launch (src/record/egress.ts).
+      process.env.ROLLCUT_PUBLIC_ONLY = '1';
       continue;
     }
     const value = rest[++i];
@@ -284,6 +291,9 @@ async function runRepair(args: Args): Promise<void> {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  if (process.env.ROLLCUT_PUBLIC_ONLY === '1' && args.url && !/^https?:\/\//i.test(args.url)) {
+    throw new Error(`--url ${args.url}: public-only mode opens http(s) addresses only.`);
+  }
 
   if (args.command === 'repair') {
     await runRepair(args);

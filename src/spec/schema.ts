@@ -4,8 +4,26 @@ const point = z.tuple([z.number(), z.number()]);
 
 const withNote = { note: z.string().optional() };
 
+// Where the browser may be sent: a path on the site (/pricing), an http(s)
+// address, or a local file (recording a static page). Schemes that run code or
+// open browser internals (javascript:, data:, chrome:, view-source:, ...) have
+// no place in a walkthrough and are refused. Public-only mode (egress.ts)
+// narrows this to paths and http(s) only, file: included.
+const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
+export function schemeOf(target: string): string | undefined {
+  return SCHEME.exec(target.trim())?.[1]?.toLowerCase();
+}
+export function isWebTarget(target: string, allowFile = true): boolean {
+  const scheme = schemeOf(target);
+  if (!scheme) return target.trim().length > 0;
+  return scheme === 'http' || scheme === 'https' || (allowFile && scheme === 'file');
+}
+const target = z.string().refine((t) => isWebTarget(t), {
+  message: 'must be a path like /pricing, an http(s) address or a file: address',
+});
+
 export const stepSchema = z.union([
-  z.object({ navigate: z.string(), ...withNote }).strict(),
+  z.object({ navigate: target, ...withNote }).strict(),
   z.object({ click: z.string(), ...withNote }).strict(),
   z.object({ clickAt: point, ...withNote }).strict(),
   z.object({ drag: z.object({ from: point, to: point }).strict(), ...withNote }).strict(),
@@ -22,7 +40,10 @@ export type Step = z.infer<typeof stepSchema>;
 
 export const specSchema = z
   .object({
-    baseUrl: z.string().url(),
+    baseUrl: z
+      .string()
+      .url()
+      .refine((u) => isWebTarget(u), { message: 'must be an http(s) or file: address' }),
     viewport: z
       .object({ width: z.number().int().positive(), height: z.number().int().positive() })
       .strict()

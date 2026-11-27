@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { relative } from 'node:path';
 import yaml from 'js-yaml';
-import { specSchema } from './schema.js';
+import { isWebTarget, specSchema } from './schema.js';
+export const MAX_SPEC_BYTES = 256 * 1024;
 /** Turn a zod issue path into something a human can find in the YAML. */
 function locate(path) {
     if (path.length === 0)
@@ -26,6 +27,15 @@ function explain(err, file) {
     });
     return `${file} is not a valid Rollcut spec:\n${lines.join('\n')}`;
 }
+/** Public-only mode: the browser opens web addresses only, never a local file. */
+export function checkPublicOnly(spec, path) {
+    const bad = [
+        spec.baseUrl,
+        ...spec.steps.flatMap((s) => ('navigate' in s ? [s.navigate] : [])),
+    ].find((t) => !isWebTarget(t, false));
+    if (bad)
+        throw new Error(`${path}: public-only mode opens web addresses only, not ${bad}`);
+}
 export async function loadSpec(path) {
     let raw;
     try {
@@ -33,6 +43,10 @@ export async function loadSpec(path) {
     }
     catch {
         throw new Error(`Cannot read spec \`${path}\` — check the path. Example: rollcut record demos/excalidraw.yaml`);
+    }
+    // Specs are a few KB; a cap keeps a hostile one from tying up the parser.
+    if (Buffer.byteLength(raw) > MAX_SPEC_BYTES) {
+        throw new Error(`${path} is ${Math.round(Buffer.byteLength(raw) / 1024)} KB; a spec can be at most ${MAX_SPEC_BYTES / 1024} KB.`);
     }
     let doc;
     try {
@@ -45,6 +59,8 @@ export async function loadSpec(path) {
     if (!parsed.success) {
         throw new Error(explain(parsed.error, relative(process.cwd(), path) || path));
     }
+    if (process.env.ROLLCUT_PUBLIC_ONLY === '1')
+        checkPublicOnly(parsed.data, path);
     return parsed.data;
 }
 //# sourceMappingURL=load.js.map
